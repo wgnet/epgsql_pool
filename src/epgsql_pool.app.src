@@ -1,0 +1,12 @@
+{application, epgsql_pool, [
+    {description, "Connection pool for PostgreSQL"},
+    {vsn, "1"},
+    {registered, []},
+    {applications, [
+        wgconfig,
+        pooler,
+        epgsql
+    ]},
+    {mod, { epgsql_pool_app, []}},
+    {env, []}
+]}.
