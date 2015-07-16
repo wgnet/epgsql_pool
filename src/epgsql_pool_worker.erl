@@ -13,37 +13,51 @@
     code_change/3
 ]).
 
+-import(epgsql_pool_utils, [
+    new_connection/1,
+    open_connection/1,
+    close_connection/1,
+    reconnect/1
+]).
+
 -include("epgsql_pool.hrl").
+
 -include_lib("epgsql/include/epgsql.hrl").
 
--define(MAX_RECONNECT_TIMEOUT, 1000*30).
--define(MIN_RECONNECT_TIMEOUT, 200).
-
 -record(state, {
-    connection            :: pid(),
-    params                :: #epgsql_params{},
-    reconnect_attempt = 0 :: non_neg_integer(),
-    reconnect_timeout = 0 :: non_neg_integer()
+    config_section :: string(),
+    connection     :: #epgsql_connection{},
+    connection_timeout  :: non_neg_integer(),
+    query_timeout       :: non_neg_integer()
 }).
 
 start_link(Params) ->
     gen_server:start_link(?MODULE, Params, []).
 
-init(Params) -> 
+init(SectionName) -> 
+    lager:debug("Init epgsql pool worker: ~p", [SectionName]),
     process_flag(trap_exit, true),
-    random:seed(now()),
-    self() ! open_connection,
-    {ok, #state{params=Params}}.
+    random:seed(os:timestamp()),
+
+    State = #state{
+        config_section       = SectionName,
+        connection           = new_connection(SectionName)
+    },
+    erlang:send(self(), open_connection),
+    {ok, State}.
 
 handle_call({_Message}, _From, #state{connection = undefined} = State) ->
     {reply, {error, no_connection}, State};
-handle_call({equery, Stmt, Params}, From, State) ->
-    TStart = now(),
-    Result = epgsql:equery(State#state.connection, Stmt, Params),
-    Time = timer:now_diff(now(), TStart),
+handle_call({equery, Stmt, Params}, _From, State) ->
+    ConnState = State#state.connection,
+    Conn = ConnState#epgsql_connection.connection,
+    TStart = os:timestamp(),
+    %TODO: query_timeout
+    Result = epgsql:equery(Conn, Stmt, Params),
+    Time = timer:now_diff(os:timestamp(), TStart),
     lager:debug(
-        "Stmt=~p, Params=~p, Time=~p ms, Result=~p",
-        [Stmt, Params, Time / 1.0e3, Result]),
+        "Stmt=~p, Params=~p, Time=~p s, Result=~p",
+        [Stmt, Params, Time / 1.0e6, Result]),
     {reply, Result, State};
 handle_call(Message, From, State) ->
     lager:info(
@@ -55,17 +69,28 @@ handle_cast(Message, State) ->
     {noreply, State}.
 
 handle_info(open_connection, State) ->
-    case open_connection(State) of
-        {ok, UpdState} ->
-            {noreply, UpdState};
-        {error, UpdState} ->
-            {noreply, reconnect(UpdState)}
+    ConnState = State#state.connection,
+    case open_connection(ConnState) of
+        {ok, UpdConnState} ->
+            lager:debug("Connected: ~p", [UpdConnState]),
+            {noreply, State#state{connection = UpdConnState}};
+        {error, UpdConnState} ->
+            lager:error(
+                "Pool ~p could not to connect",
+                [State#state.config_section]),
+            folsom_metrics:notify({<<"db_connection_errors">>, 1}),
+            {noreply, State#state{connection = reconnect(UpdConnState)}}
     end;
 
-handle_info({'EXIT', Pid, Reason}, #state{connection = C} = State) when Pid == C ->
-    lager:error("Exit with reason: ~p", [Reason]),
-    close_connection(State),
-    {noreply, reconnect(State)};
+handle_info(
+        {'EXIT', Pid, Reason},
+        #state{connection = #epgsql_connection{connection = C}} = State)
+        when Pid == C ->
+
+    lager:debug("EXIT: Connection ~p, Reason: ~p", [Pid, Reason]),
+    UpdConnState = close_connection(State#state.connection),
+    folsom_metrics:notify({<<"db_connection_errors">>, 1}),
+    {noreply, State#state{connection = reconnect(UpdConnState)}};
 
 handle_info(Message, State) ->
     lager:debug("Info / Msg: ~p, State: ~p", [Message, State]),
@@ -79,58 +104,3 @@ code_change(_OldVsn, State, _Extra) ->
     {ok, State}.
 
 %% -- internal functions --
-
-open_connection(#state{params = Params} = State) ->
-
-    #epgsql_params{
-        host               = Host,
-        port               = Port,
-        username           = Username,
-        password           = Password,
-        database           = Database,
-        connection_timeout = ConnectionTimeout
-    } = Params,
-
-    Res = epgsql:connect(Host, Username, Password, [        
-        {port, Port},
-        {database, Database},
-        {timeout, ConnectionTimeout}
-    ]),
-    case Res of
-        {ok, Sock} ->
-            {ok, State#state{
-                connection=Sock,
-                reconnect_attempt=0}};
-        {error, Reason} ->
-            lager:error("Connect fail: ~p", [Reason]),
-            {error, State}
-    end.
-
-close_connection(State) ->
-    Connection = State#state.connection,
-    epgsql:close(Connection),
-    #state{connection = undefined}.
-
-reconnect(#state{
-        reconnect_attempt = R,
-        reconnect_timeout = T} = State) ->
-    case T > ?MAX_RECONNECT_TIMEOUT of
-        true ->
-            reconnect_after(R, ?MIN_RECONNECT_TIMEOUT, T),
-            State#state{reconnect_attempt = R + 1};
-        _ ->
-            T2 = exponential_backoff(R, ?MIN_RECONNECT_TIMEOUT),
-            reconnect_after(R, ?MIN_RECONNECT_TIMEOUT, T2),
-            State#state{reconnect_attempt=R + 1, reconnect_timeout=T2}
-    end.
-
-reconnect_after(R, Tmin, Tmax) ->
-    Delay = rand_range(Tmin, Tmax),
-    lager:error("Reconnect after ~w ms (attempt ~w)", [Delay, R]),
-    erlang:send_after(Delay, self(), open_connection).
-
-rand_range(Min, Max) ->
-    max(random:uniform(Max), Min).
-
-exponential_backoff(N, T) ->
-    erlang:round(math:pow(2, N)) * T.

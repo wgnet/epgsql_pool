@@ -3,9 +3,11 @@
     {vsn, "1"},
     {registered, []},
     {applications, [
-        wgconfig,
+        epgsql,
+        lager,
         pooler,
-        epgsql
+        folsom,
+        wgconfig
     ]},
     {mod, { epgsql_pool_app, []}},
     {env, []}

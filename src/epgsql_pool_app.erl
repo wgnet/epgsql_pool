@@ -11,43 +11,33 @@
 
 start(_StartType, _StartArgs) ->
     register(?MODULE, self()),
-    start_pool(),
+    lists:foreach(fun start_pool/1, wgconfig:list_sections("epgsql_pool")),
+
+    folsom_metrics:new_spiral(<<"db_connection_errors">>),
+    folsom_metrics:new_spiral(<<"db_common_errors">>),
+    folsom_metrics:new_spiral(<<"db_request_timeouts">>),
     {ok, self()}.
 
 stop(_State) ->
-    stop_pool(),
+    lists:foreach(fun stop_pool/1, wgconfig:list_sections("epgsql_pool")),
     ok.
+
+%% Internal functions
 
 -include("epgsql_pool.hrl").
 
-start_pool() ->
-    InitCount = wgconfig:get_int(?POOL_NAME, init_count),
-    MaxCount = wgconfig:get_int(?POOL_NAME, max_count),
-
-    % Connection parameters
-    Hots = wgconfig:get_string(?POOL_NAME, host),
-    Port = wgconfig:get_int(?POOL_NAME, port),
-    Username = wgconfig:get_string(?POOL_NAME, username),
-    Password = wgconfig:get_string(?POOL_NAME, password),
-    Database = wgconfig:get_string(?POOL_NAME, database),
-    ConnectionTimeout = wgconfig:get_int(?POOL_NAME, connection_timeout),
-    QueryTimeout = wgconfig:get_int(?POOL_NAME, query_timeout),
-
-    Params = #epgsql_params{
-        host=Hots, port=Port,
-        username=Username, password=Password,
-        database=Database,
-        connection_timeout=ConnectionTimeout,
-        query_timeout=QueryTimeout
-    },
+start_pool(PoolName) ->
+    InitCount = wgconfig:get_int(PoolName, init_count),
+    MaxCount = wgconfig:get_int(PoolName, max_count),
 
     PoolConfig = [
-        {name, ?POOL_NAME},
+        {name, erlang:binary_to_atom(PoolName, utf8)},
         {init_count, InitCount},
         {max_count, MaxCount},
-        {start_mfa, {epgsql_pool_worker, start_link, [Params]}}
+        {start_mfa, {epgsql_pool_worker, start_link, [PoolName]}}
     ],
     pooler:new_pool(PoolConfig).
 
-stop_pool() ->
-    pooler:rm_pool(?POOL_NAME).
+stop_pool(PoolName) ->
+    APoolName = erlang:binary_to_atom(PoolName, utf8),
+    pooler:rm_pool(APoolName).

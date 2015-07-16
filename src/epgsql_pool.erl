@@ -1,44 +1,47 @@
 -module(epgsql_pool).
 
 -export([
-    transaction/1,
-    equery/2
+    equery/3,
+    transaction/2
 ]).
 
 -include("epgsql_pool.hrl").
 
+% TODO: move parameter into config
 -define(TIMEOUT, 1000).
 
-equery(Stmt, Params) ->
+equery({worker, _PoolName, Worker}, Stmt, Params) ->
+    % TODO: infinity - looks as dangerous
+    gen_server:call(Worker, {equery, Stmt, Params}, infinity);
+equery(PoolName, Stmt, Params) ->
     % Example
-    % epgsql_pool:equery("SELECT NOW() as now", []).
+    % epgsql_pool:equery(<<"default">>, "SELECT NOW() as now", []).
     transaction(
+        PoolName,
         fun(Worker) ->
-            equery({worker, Worker}, Stmt, Params)
+            equery(Worker, Stmt, Params)
         end).
 
-equery({worker, Worker}, Stmt, Params) ->
-    gen_server:call(Worker, {equery, Stmt, Params}, infinity).
-
-transaction(Fun) ->
+transaction(PoolName, Fun) ->
+    FullPoolName = list_to_atom("epgsql_pool." ++ binary_to_list(PoolName)),
     % TODO: logging with time of execution
-    case pooler:take_member(?POOL_NAME, ?TIMEOUT) of
-        Worker when is_pid(Worker) ->
-            W = {worker, Worker},
+    case pooler:take_member(FullPoolName, ?TIMEOUT) of
+        Pid when is_pid(Pid) ->
+            Worker = {worker, FullPoolName, Pid},
             try
-                equery(W, "BEGIN", []),
+                equery(Worker, "BEGIN", []),
                 Result = Fun(Worker),
-                equery(W, "COMMIT", []),
+                equery(Worker, "COMMIT", []),
                 Result
             catch
                 Err:Reason ->
-                    equery(W, "ROLLBACK", []),
+                    equery(Worker, "ROLLBACK", []),
                     erlang:raise(Err, Reason, erlang:get_stacktrace())
             after
-                pooler:return_member(?POOL_NAME, Worker, ok)
+                pooler:return_member(FullPoolName, Pid, ok)
             end;
         error_no_members ->
-            PoolStats = pooler:pool_stats(?POOL_NAME),
-            lager:warning("Pool overload: ~p", [PoolStats]),
+            PoolStats = pooler:pool_stats(FullPoolName),
+            lager:warning("Pool ~p overload: ~p", [FullPoolName, PoolStats]),
             {error, no_members}
     end.
