@@ -1,6 +1,7 @@
 -module(epgsql_pool_utils).
 
 -export([
+    get_host_params/1,
     new_connection/1,
     open_connection/1,
     close_connection/1,
@@ -10,16 +11,19 @@
 -include_lib("epgsql/include/epgsql.hrl").
 -include("epgsql_pool.hrl").
 
-new_connection(SectionName) ->
-    HostSection = wgconfig:get_string(SectionName, "db_host"),
-    % Connection parameters
-    Params = #epgsql_params{
+get_host_params(HostSection) ->
+    #epgsql_params{
         host                 = wgconfig:get_string(HostSection, "host"),
         port                 = wgconfig:get_int(HostSection, "port"),
         username             = wgconfig:get_string(HostSection, "username"),
         password             = wgconfig:get_string(HostSection, "password"),
         database             = wgconfig:get_string(HostSection, "database")
-    },
+    }.
+
+new_connection(SectionName) ->
+    HostSection = wgconfig:get_string(SectionName, "db_host"),
+    % Connection parameters
+    Params = get_host_params(HostSection),
     #epgsql_connection{
         connection_timeout   = wgconfig:get_int(SectionName, "connection_timeout"),
         query_timeout        = wgconfig:get_int(SectionName, "query_timeout"),
