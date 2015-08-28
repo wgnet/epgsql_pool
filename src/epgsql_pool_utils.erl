@@ -1,12 +1,13 @@
 -module(epgsql_pool_utils).
 
 -export([
-    get_host_params/1,
-    new_connection/1,
-    open_connection/1,
-    close_connection/1,
-    reconnect/1
-]).
+         get_host_params/1,
+         new_connection/1,
+         open_connection/1,
+         close_connection/1,
+         reconnect/1,
+         pool_name_to_atom/1
+        ]).
 
 -include_lib("epgsql/include/epgsql.hrl").
 -include("epgsql_pool.hrl").
@@ -42,7 +43,7 @@ open_connection(State) ->
     } = Params,
     ConnectionTimeout = State#epgsql_connection.connection_timeout,
 
-    Res = epgsql:connect(Host, Username, Password, [        
+    Res = epgsql:connect(Host, Username, Password, [
         {port, Port},
         {database, Database},
         {timeout, ConnectionTimeout}
@@ -65,13 +66,13 @@ close_connection(State) ->
 reconnect(#epgsql_connection{
         reconnect_attempt = R,
         reconnect_timeout = T} = State) ->
-    case T > ?MAX_RECONNECT_TIMEOUT of
+    case T > ?DB_MAX_RECONNECT_TIMEOUT of
         true ->
-            reconnect_after(R, ?MIN_RECONNECT_TIMEOUT, T),
+            reconnect_after(R, ?DB_MIN_RECONNECT_TIMEOUT, T),
             State#epgsql_connection{reconnect_attempt = R + 1};
         _ ->
-            T2 = exponential_backoff(R, ?MIN_RECONNECT_TIMEOUT),
-            reconnect_after(R, ?MIN_RECONNECT_TIMEOUT, T2),
+            T2 = exponential_backoff(R, ?DB_MIN_RECONNECT_TIMEOUT),
+            reconnect_after(R, ?DB_MIN_RECONNECT_TIMEOUT, T2),
             State#epgsql_connection{reconnect_attempt=R + 1, reconnect_timeout=T2}
     end.
 
@@ -85,3 +86,11 @@ rand_range(Min, Max) ->
 
 exponential_backoff(N, T) ->
     erlang:round(math:pow(2, N)) * T.
+
+
+-spec pool_name_to_atom(pool_name()) -> atom().
+pool_name_to_atom(PoolName) when is_binary(PoolName) ->
+    pool_name_to_atom(erlang:binary_to_atom(PoolName, utf8));
+pool_name_to_atom(PoolName) when is_list(PoolName) ->
+    pool_name_to_atom(list_to_atom(PoolName));
+pool_name_to_atom(PoolName) -> PoolName.
