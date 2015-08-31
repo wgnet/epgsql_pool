@@ -1,21 +1,21 @@
 -module(epgsql_pool).
 
--export([
-         start/3, stop/1,
+-export([start/3, stop/1,
          equery/2, equery/3,
          transaction/2
         ]).
 
 -include("epgsql_pool.hrl").
 
--import(epgsql_pool_utils, [pool_name_to_atom/1]).
+-type(pool_name() :: binary() | string() | atom()).
+-export_type([pool_name/0]).
 
 
 %% Module API
 
--spec start(pool_name(), integer(), integer()) -> ok. % TODO what returns from pooler:new_pool?
+-spec start(pool_name(), integer(), integer()) -> {ok, pid()} | {error, term()}.
 start(PoolName0, InitCount, MaxCount) ->
-    PoolName = pool_name_to_atom(PoolName0),
+    PoolName = epgsql_pool_utils:pool_name_to_atom(PoolName0),
     PoolConfig = [
         {name, PoolName},
         {init_count, InitCount},
@@ -25,19 +25,19 @@ start(PoolName0, InitCount, MaxCount) ->
     pooler:new_pool(PoolConfig).
 
 
--spec stop(pool_name()) -> ok. % TODO what returns from pooler:stop?
+-spec stop(pool_name()) -> ok | {error, term()}.
 stop(PoolName) ->
-    pooler:rm_pool(pool_name_to_atom(PoolName)).
+    pooler:rm_pool(epgsql_pool_utils:pool_name_to_atom(PoolName)).
 
 
--spec equery(pool_name(), db_query()) -> db_reply().
+-spec equery(pool_name(), epgsql:sql_query()) -> epgsql:reply().
 equery(PoolName, Stmt) ->
     equery(PoolName, Stmt, []).
 
 
 %% Example
 %% epgsql_pool:equery("my_db_pool", "SELECT NOW() as now", []).
--spec equery(pool_name(), db_query(), list()) -> db_reply().
+-spec equery(pool_name(), epgsql:sql_query(), [epgsql:bind_param()]) -> epgsql:reply().
 equery(PoolName, Stmt, Params) ->
     transaction(PoolName,
                 fun(Worker) ->
@@ -45,19 +45,20 @@ equery(PoolName, Stmt, Params) ->
                 end).
 
 
--spec transaction(pool_name(), fun()) -> db_reply() | {error, term()}.
+-spec transaction(pool_name(), fun()) -> epgsql:reply() | {error, term()}.
 transaction(PoolName0, Fun) ->
-    PoolName = pool_name_to_atom(PoolName0),
-    case pooler:take_member(PoolName, ?DB_POOLER_GET_WORKER_TIMEOUT) of
+    PoolName = epgsql_pool_utils:pool_name_to_atom(PoolName0),
+    Timeout = epgsql_pool_settings:get(pooler_get_worker_timeout),
+    case pooler:take_member(PoolName, Timeout) of
         Worker when is_pid(Worker) ->
             try
-                equery(Worker, "BEGIN", []),
+                equery_with_worker(Worker, "BEGIN", []),
                 Result = Fun(Worker),
-                equery(Worker, "COMMIT", []),
+                equery_with_worker(Worker, "COMMIT", []),
                 Result
             catch
                 Err:Reason ->
-                    equery(Worker, "ROLLBACK", []),
+                    equery_with_worker(Worker, "ROLLBACK", []),
                     erlang:raise(Err, Reason, erlang:get_stacktrace())
             after
                 pooler:return_member(PoolName, Worker, ok)
@@ -71,6 +72,7 @@ transaction(PoolName0, Fun) ->
 
 %% Inner functions
 
--spec equery_with_worker(pid(), db_query(), list()) -> db_reply().
+-spec equery_with_worker(pid(), epgsql:sql_query(), [epgsql:bind_param()]) -> epgsql:reply().
 equery_with_worker(Worker, Stmt, Params) ->
-    gen_server:call(Worker, {equery, Stmt, Params}, ?DB_QUERY_TIMEOUT).
+    Timeout = epgsql_pool_settings:get(query_timeout),
+    gen_server:call(Worker, {equery, Stmt, Params}, Timeout). % TODO need other way to implement it

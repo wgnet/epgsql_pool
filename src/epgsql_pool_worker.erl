@@ -6,7 +6,7 @@
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2, terminate/2, code_change/3]).
 
 -include("epgsql_pool.hrl").
--include_lib("epgsql/include/epgsql.hrl").
+-include("otp_types.hrl").
 
 -record(state, {pool_name :: atom(),
                 connection :: #epgsql_connection{}
@@ -14,6 +14,7 @@
 
 %% Module API
 
+-spec start_link(epgsql_pool:pool_name()) -> gs_start_link_reply().
 start_link(PoolName0) ->
     PoolName = epgsql_pool_utils:pool_name_to_atom(PoolName0),
     gen_server:start_link(?MODULE, PoolName, []).
@@ -21,22 +22,23 @@ start_link(PoolName0) ->
 
 %%% gen_server API
 
+-spec init(gs_args()) -> gs_init_reply().
 init(PoolName) ->
-    error_logger:info_message("Init epgsql pool worker: ~p", [PoolName]),
+    error_logger:info_msg("Init epgsql pool worker: ~p", [PoolName]),
     process_flag(trap_exit, true),
     self() ! open_connection,
     {ok, #state{pool_name = PoolName}}.
 
 
+-spec handle_call(gs_request(), gs_from(), gs_reply()) -> gs_call_reply().
 handle_call({equery, _, _}, _From, #state{connection = undefined} = State) ->
     {reply, {error, no_connection}, State};
 
-handle_call({equery, Stmt, Params}, _From, State) ->
-    ConnState = State#state.connection,
-    Conn = ConnState#epgsql_connection.connection,
+handle_call({equery, Stmt, Params}, _From, #state{connection = Connection} = State) ->
     %% TStart = os:timestamp(),
     %% TODO: query_timeout
-    Result = epgsql:equery(Conn, Stmt, Params),
+    Sock = Connection#epgsql_connection.connection_sock,
+    Result = epgsql:equery(Sock, Stmt, Params),
     %% Time = timer:now_diff(os:timestamp(), TStart),
     {reply, Result, State};
 
@@ -45,14 +47,16 @@ handle_call(Message, _From, State) ->
     {reply, ok, State}.
 
 
+-spec handle_cast(gs_request(), gs_state()) -> gs_cast_reply().
 handle_cast(Message, State) ->
     error_logger:error_msg("unknown cast ~p in ~p ~n", [Message, ?MODULE]),
     {noreply, State}.
 
 
+-spec handle_info(gs_request(), gs_state()) -> gs_info_reply().
 handle_info(open_connection, #state{pool_name = PoolName} = State) ->
     ConnectionParams = epgsql_pool_settings:get_connection_params(PoolName),
-    case open_connection(ConnectionParams) of
+    case epgsql_pool_utils:open_connection(ConnectionParams) of
         {ok, Connection} ->
             {noreply, State#state{connection = Connection}};
         {error, Reason, Connection} ->
@@ -74,9 +78,11 @@ handle_info(Message, State) ->
     {noreply, State}.
 
 
+-spec terminate(terminate_reason(), gs_state()) -> ok.
 terminate(_Reason, _State) ->
-    normal.
+    ok.
 
 
+-spec code_change(term(), term(), term()) -> gs_code_change_reply().
 code_change(_OldVsn, State, _Extra) ->
     {ok, State}.

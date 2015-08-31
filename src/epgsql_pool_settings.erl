@@ -7,6 +7,9 @@
 -include("epgsql_pool.hrl").
 -include("otp_types.hrl").
 
+-type(epgsql_pool_settings_key() ::
+        connection_timeout | query_timeout | pooler_get_worker_timeout | max_reconnect_timeout | min_reconnect_timeout).
+
 
 %%% module API
 
@@ -15,7 +18,7 @@ start_link() ->
     gen_server:start_link({local, ?MODULE}, ?MODULE, [], []).
 
 
--spec get_connection_params(pool_name()) -> #epgsql_connection_params{}.
+-spec get_connection_params(epgsql_pool:pool_name()) -> #epgsql_connection_params{}.
 get_connection_params(PoolName) ->
     Key = {connection, epgsql_pool_utils:pool_name_to_atom(PoolName)},
     case ets:lookup(?MODULE, Key) of
@@ -24,7 +27,7 @@ get_connection_params(PoolName) ->
     end.
 
 
--spec set_connection_params(pool_name(), #epgsql_connection_params{}) -> ok.
+-spec set_connection_params(egpsql_pool:pool_name(), #epgsql_connection_params{}) -> ok.
 set_connection_params(PoolName, Params) ->
     Key = {connection, epgsql_pool_utils:pool_name_to_atom(PoolName)},
     gen_server:call(?MODULE, {save, Key, Params}).
@@ -34,7 +37,7 @@ set_connection_params(PoolName, Params) ->
 get(Key) ->
     case ets:lookup(?MODULE, {settings, Key}) of
         [] -> throw({settings_not_found, Key});
-        [Value] -> Value
+        [{_, Value}] -> Value
     end.
 
 
