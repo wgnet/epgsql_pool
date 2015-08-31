@@ -9,19 +9,21 @@
 -type(db_reply() :: term()). % TODO: narrow type
 
 
+-type(epgsql_pool_settings_key() ::
+        connection_timeout | query_timeout | pooler_get_worker_timeout | max_reconnect_timeout | min_reconnect_timeout).
+
+
 -record(epgsql_connection_params, {
-    host                :: string() | binary(),
-    port                :: non_neg_integer(),
-    username            :: string() | binary(),
-    password            :: string() | binary(),
-    database            :: string() | binary()
+    host :: string() | binary(),
+    port :: non_neg_integer(),
+    username :: string() | binary(),
+    password :: string() | binary(),
+    database :: string() | binary()
 }).
 
 -record(epgsql_connection, {
-    connection            :: pid(),
-    params                :: #epgsql_connection_params{},
-    connection_timeout    :: non_neg_integer(),
-    query_timeout         :: non_neg_integer(),
+    connection_sock :: pid(),
+    params :: #epgsql_connection_params{},
     reconnect_attempt = 0 :: non_neg_integer(),
     reconnect_timeout = 0 :: non_neg_integer()
 }).
