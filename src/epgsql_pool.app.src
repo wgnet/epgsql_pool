@@ -1,3 +1,5 @@
+%%-*- mode: erlang -*-
+
 {application, epgsql_pool, [
     {description, "Connection pool for PostgreSQL"},
     {vsn, "1.0.0"},
@@ -6,5 +8,6 @@
         epgsql,
         pooler
     ]},
+    {mod, {epgsql_pool_app, []}},
     {env, []}
 ]}.

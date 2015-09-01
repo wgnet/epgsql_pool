@@ -23,7 +23,7 @@ get_connection_params(PoolName) ->
     Key = {connection, epgsql_pool_utils:pool_name_to_atom(PoolName)},
     case ets:lookup(?MODULE, Key) of
         [] -> throw({connection_params_not_found, PoolName});
-        [ConnectionParams] -> ConnectionParams
+        [{{connection, PoolName}, ConnectionParams}] -> ConnectionParams
     end.
 
 
@@ -61,7 +61,7 @@ init([]) ->
 
 -spec handle_call(gs_request(), gs_from(), gs_reply()) -> gs_call_reply().
 handle_call({save, Key, Value}, _From, Table) ->
-    ets:insert(Table, Key, Value),
+    ets:insert(Table, {Key, Value}),
     {reply, ok, Table};
 
 handle_call(Any, _From, State) ->
@@ -76,6 +76,9 @@ handle_cast(Any, State) ->
 
 
 -spec handle_info(gs_request(), gs_state()) -> gs_info_reply().
+handle_info(stop, State) ->
+    {stop, normal, State};
+
 handle_info(Request, State) ->
     error_logger:error_msg("unknown info ~p in ~p ~n", [Request, ?MODULE]),
     {noreply, State}.
