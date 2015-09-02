@@ -7,15 +7,18 @@
 -include_lib("common_test/include/ct.hrl").
 
 -export([all/0,
-         init_per_suite/1, end_per_suite/1,
-         init_per_testcase/2, end_per_testcase/2,
-         test_1/1
+         init_per_suite/1, end_per_suite/1, init_per_testcase/2, end_per_testcase/2,
+         start_test/1, stop_test/1, equery_test/1, transaction_test/1, reconnect_test/1
         ]).
 
 
-all() -> [
-    test_1
-].
+all() ->
+    [start_test,
+     stop_test,
+     equery_test,
+     transaction_test,
+     reconnect_test
+    ].
 
 
 init_per_suite(Config) ->
@@ -34,18 +37,38 @@ init_per_testcase(_, Config) ->
     #epgsql_connection{connection_sock = Sock} = Connection,
     epgsql:equery(Sock, "TRUNCATE TABLE item"),
     epgsql:equery(Sock, "TRUNCATE TABLE category CASCADE"),
-    [{connection, Connection}].
+    [{connection, Connection} | proplists:delete(connection, Config)].
 
 
 end_per_testcase(_, Config) ->
     Connection = proplists:get_value(connection, Config),
-    epgsql_pool_utils:close_connection(Connection),
-    Config.
+    Connection2 = epgsql_pool_utils:close_connection(Connection),
+    #epgsql_connection{connection_sock = undefined} = Connection2,
+    [{connection, Connection2} | proplists:delete(connection, Config)].
 
 
-test_1(Config) ->
+start_test(Config) ->
+    ok.
+
+
+stop_test(Config) ->
+    ok.
+
+equery_test(Config) ->
     Connection = proplists:get_value(connection, Config),
     #epgsql_connection{connection_sock = Sock} = Connection,
-    Res = epgsql:equery(Sock, "SELECT * FROM item"),
+    Res = epgsql:equery(Sock, "SELECT * FROM item"), % TODO epgsql_pool:equery, after start
     ct:pal("Res:~p", [Res]),
+    ok.
+
+
+transaction_test(Config) ->
+    Connection = proplists:get_value(connection, Config),
+    #epgsql_connection{connection_sock = Sock} = Connection,
+    Res = epgsql:equery(Sock, "SELECT * FROM category"), % TODO epgsql_pool:transaction
+    ct:pal("Res:~p", [Res]),
+    ok.
+
+
+reconnect_test(Config) ->
     ok.
