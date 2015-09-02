@@ -75,4 +75,11 @@ transaction(PoolName0, Fun) ->
 -spec equery_with_worker(pid(), epgsql:sql_query(), [epgsql:bind_param()]) -> epgsql:reply().
 equery_with_worker(Worker, Stmt, Params) ->
     Timeout = epgsql_pool_settings:get(query_timeout),
-    gen_server:call(Worker, {equery, Stmt, Params}, Timeout). % TODO need other way to implement it
+    % TODO process timeout,
+    % try-catch
+    % send cancel
+    % log error
+    % reply to client with error
+    % reconnect
+    % return to pool
+    gen_server:call(Worker, {equery, Stmt, Params}, Timeout).

@@ -36,7 +36,6 @@ handle_call({equery, _, _}, _From, #state{connection = undefined} = State) ->
 
 handle_call({equery, Stmt, Params}, _From, #state{connection = Connection} = State) ->
     %% TStart = os:timestamp(),
-    %% TODO: query_timeout
     Sock = Connection#epgsql_connection.connection_sock,
     Result = epgsql:equery(Sock, Stmt, Params),
     %% Time = timer:now_diff(os:timestamp(), TStart),
