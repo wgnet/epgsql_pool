@@ -5,16 +5,17 @@
 
 -include("epgsql_pool.hrl").
 -include_lib("common_test/include/ct.hrl").
+-include_lib("eunit/include/eunit.hrl").
+
 
 -export([all/0,
          init_per_suite/1, end_per_suite/1, init_per_testcase/2, end_per_testcase/2,
-         start_test/1, stop_test/1, equery_test/1, transaction_test/1, reconnect_test/1
+         start_stop_test/1, equery_test/1, transaction_test/1, reconnect_test/1
         ]).
 
 
 all() ->
-    [start_test,
-     stop_test,
+    [start_stop_test,
      equery_test,
      transaction_test,
      reconnect_test
@@ -47,28 +48,39 @@ end_per_testcase(_, Config) ->
     [{connection, Connection2} | proplists:delete(connection, Config)].
 
 
-start_test(Config) ->
-    ok.
-
-
-stop_test(Config) ->
+start_stop_test(Config) ->
+    Params = #epgsql_connection_params{host = "localhost", port = 5432,
+                                       username="test", password="test",
+                                       database="testdb"},
+    epgsql_pool_settings:set_connection_params(my_pool, Params),
+    {ok, _} = epgsql_pool:start(my_pool, 5, 10),
+    ok = epgsql_pool:stop(my_pool),
     ok.
 
 equery_test(Config) ->
     Connection = proplists:get_value(connection, Config),
-    #epgsql_connection{connection_sock = Sock} = Connection,
-    Res = epgsql:equery(Sock, "SELECT * FROM item"), % TODO epgsql_pool:equery, after start
-    ct:pal("Res:~p", [Res]),
+    epgsql_pool_settings:set_connection_params(my_pool, Connection#epgsql_connection.params),
+    {ok, _} = epgsql_pool:start(my_pool, 5, 10),
+
+    {ok, 3, _, Ids} = epgsql_pool:equery(my_pool,
+                                         "INSERT INTO category (title) "
+                                         "VALUES ('cat 1'), ('cat 2'), ('cat 3') "
+                                         "RETURNING id"),
+    WaitForRows = lists:map(fun({{Id}, Title}) -> {Id, Title} end,
+                            lists:zip(Ids, [<<"cat 1">>, <<"cat 2">>, <<"cat 3">>])),
+    {ok, _, Rows} = epgsql_pool:equery(my_pool, "SELECT id, title FROM category ORDER by id ASC"),
+    ct:pal("Rows ~p", [Rows]),
+    ?assertEqual(WaitForRows, Rows),
+
+    ok = epgsql_pool:stop(my_pool),
     ok.
 
 
 transaction_test(Config) ->
-    Connection = proplists:get_value(connection, Config),
-    #epgsql_connection{connection_sock = Sock} = Connection,
-    Res = epgsql:equery(Sock, "SELECT * FROM category"), % TODO epgsql_pool:transaction
-    ct:pal("Res:~p", [Res]),
+    throw(not_implemented),
     ok.
 
 
 reconnect_test(Config) ->
+    throw(not_implemented),
     ok.
