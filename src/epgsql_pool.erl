@@ -30,18 +30,29 @@ stop(PoolName) ->
     pooler:rm_pool(epgsql_pool_utils:pool_name_to_atom(PoolName)).
 
 
--spec equery(pool_name(), epgsql:sql_query()) -> epgsql:reply().
-equery(PoolName, Stmt) ->
-    equery(PoolName, Stmt, []).
+-spec equery(pool_name() | pid(), epgsql:sql_query()) -> epgsql:reply().
+equery(PoolNameOrWorker, Stmt) ->
+    equery(PoolNameOrWorker, Stmt, []).
 
 
 %% Example
 %% epgsql_pool:equery("my_db_pool", "SELECT NOW() as now", []).
--spec equery(pool_name(), epgsql:sql_query(), [epgsql:bind_param()]) -> epgsql:reply().
+-spec equery(pool_name() | pid(), epgsql:sql_query(), [epgsql:bind_param()]) -> epgsql:reply().
+equery(Worker, Stmt, Params) when is_pid(Worker) ->
+    Timeout = epgsql_pool_settings:get(query_timeout),
+    % TODO process timeout,
+    % try-catch
+    % send cancel
+    % log error
+    % reply to client with error
+    % reconnect
+    % return to pool
+    gen_server:call(Worker, {equery, Stmt, Params}, Timeout);
+
 equery(PoolName, Stmt, Params) ->
     transaction(PoolName,
                 fun(Worker) ->
-                        equery_with_worker(Worker, Stmt, Params)
+                        equery(Worker, Stmt, Params)
                 end).
 
 
@@ -52,13 +63,13 @@ transaction(PoolName0, Fun) ->
     case pooler:take_member(PoolName, Timeout) of
         Worker when is_pid(Worker) ->
             try
-                equery_with_worker(Worker, "BEGIN", []),
+                equery(Worker, "BEGIN", []),
                 Result = Fun(Worker),
-                equery_with_worker(Worker, "COMMIT", []),
+                equery(Worker, "COMMIT", []),
                 Result
             catch
                 Err:Reason ->
-                    equery_with_worker(Worker, "ROLLBACK", []),
+                    equery(Worker, "ROLLBACK", []),
                     erlang:raise(Err, Reason, erlang:get_stacktrace())
             after
                 pooler:return_member(PoolName, Worker, ok)
@@ -68,18 +79,3 @@ transaction(PoolName0, Fun) ->
             error_logger:error_msg("Pool ~p overload: ~p", [PoolName, PoolStats]),
             {error, pool_overload}
     end.
-
-
-%% Inner functions
-
--spec equery_with_worker(pid(), epgsql:sql_query(), [epgsql:bind_param()]) -> epgsql:reply().
-equery_with_worker(Worker, Stmt, Params) ->
-    Timeout = epgsql_pool_settings:get(query_timeout),
-    % TODO process timeout,
-    % try-catch
-    % send cancel
-    % log error
-    % reply to client with error
-    % reconnect
-    % return to pool
-    gen_server:call(Worker, {equery, Stmt, Params}, Timeout).

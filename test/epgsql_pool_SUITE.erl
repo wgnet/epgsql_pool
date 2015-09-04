@@ -77,7 +77,43 @@ equery_test(Config) ->
 
 
 transaction_test(Config) ->
-    throw(not_implemented),
+    Connection = proplists:get_value(connection, Config),
+    epgsql_pool_settings:set_connection_params(my_pool, Connection#epgsql_connection.params),
+    {ok, _} = epgsql_pool:start(my_pool, 5, 10),
+
+    {FirstCatId, CatIds2, ItemIds2} =
+        epgsql_pool:transaction(my_pool,
+                                fun(Worker) ->
+                                        ct:pal("worker:~p", [Worker]),
+                                        {ok, 3, _, CatIds0} =
+                                            epgsql_pool:equery(Worker,
+                                                               "INSERT INTO category (title) "
+                                                               "VALUES ('cat 4'), ('cat 5'), ('cat 6') "
+                                                               "RETURNING id"),
+                                        CatIds1 = lists:map(fun({Cid}) -> Cid end, CatIds0),
+                                        CatId = hd(CatIds1),
+                                        {ok, 2, _, ItemIds0} =
+                                            epgsql_pool:equery(Worker,
+                                                               "INSERT INTO item (category_id, title, num) "
+                                                               "VALUES ($1, 'item 1', 5), ($1, 'item 2', 7) "
+                                                               "RETURNING id", [CatId]),
+                                        ItemIds1 = lists:map(fun({Iid}) -> Iid end, ItemIds0),
+                                        {CatId, CatIds1, ItemIds1}
+                                end),
+    WaitForCats = lists:zip(CatIds2, [<<"cat 4">>, <<"cat 5">>, <<"cat 6">>]),
+    {ok, _, CatRows} = epgsql_pool:equery(my_pool, "SELECT id, title FROM category ORDER by id ASC"),
+    ct:pal("CatRows ~p", [CatRows]),
+    ?assertEqual(WaitForCats, CatRows),
+
+    WaitForItems = lists:map(fun({ItemId, {Title, Num}}) -> {ItemId, FirstCatId, Title, Num} end,
+                             lists:zip(ItemIds2, [{<<"item 1">>, 5}, {<<"item 2">>, 7}])),
+    {ok, _, ItemRows} = epgsql_pool:equery(my_pool, "SELECT id, category_id, title, num FROM item ORDER by id ASC"),
+    ct:pal("ItemRows ~p", [ItemRows]),
+    ?assertEqual(WaitForItems, ItemRows),
+
+    %% TODO invalid transation (with exception)
+
+    ok = epgsql_pool:stop(my_pool),
     ok.
 
 
