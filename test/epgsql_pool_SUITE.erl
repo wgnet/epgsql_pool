@@ -13,6 +13,8 @@
          start_stop_test/1, equery_test/1, transaction_test/1, reconnect_test/1
         ]).
 
+-define(SELECT_ITEMS_QUERY, "SELECT id, category_id, title, num FROM item ORDER by id ASC").
+
 
 all() ->
     [start_stop_test,
@@ -107,16 +109,50 @@ transaction_test(Config) ->
 
     WaitForItems = lists:map(fun({ItemId, {Title, Num}}) -> {ItemId, FirstCatId, Title, Num} end,
                              lists:zip(ItemIds2, [{<<"item 1">>, 5}, {<<"item 2">>, 7}])),
-    {ok, _, ItemRows} = epgsql_pool:equery(my_pool, "SELECT id, category_id, title, num FROM item ORDER by id ASC"),
+    {ok, _, ItemRows} = epgsql_pool:equery(my_pool, ?SELECT_ITEMS_QUERY),
     ct:pal("ItemRows ~p", [ItemRows]),
     ?assertEqual(WaitForItems, ItemRows),
 
-    %% TODO invalid transation (with exception)
+    try
+        epgsql_pool:transaction(my_pool,
+                                fun(Worker) ->
+                                        ct:pal("worker:~p", [Worker]),
+                                        {ok, 2} =
+                                            epgsql_pool:equery(Worker,
+                                                               "INSERT INTO item (category_id, title, num) "
+                                                               "VALUES ($1, 'item 3', 55), ($1, 'item 4', 77) ",
+                                                               [FirstCatId]),
+                                        {ok, _, ItemRows2} = epgsql_pool:equery(Worker, ?SELECT_ITEMS_QUERY),
+                                        ct:pal("ItemRows2 ~p", [ItemRows2]),
+                                        ?assertMatch([{_, FirstCatId, <<"item 1">>, 5},
+                                                      {_, FirstCatId, <<"item 2">>, 7},
+                                                      {_, FirstCatId, <<"item 3">>, 55},
+                                                      {_, FirstCatId, <<"item 4">>, 77}],
+                                                     ItemRows2),
+                                        throw(cancel_transaction)
+                                end)
+    catch
+        throw:cancel_transaction -> ok
+    end,
+
+    %% items not changes after calcelled transaction
+    {ok, _, ItemRows} = epgsql_pool:equery(my_pool, ?SELECT_ITEMS_QUERY),
 
     ok = epgsql_pool:stop(my_pool),
     ok.
 
 
 reconnect_test(Config) ->
-    throw(not_implemented),
+    Connection = proplists:get_value(connection, Config),
+    epgsql_pool_settings:set_connection_params(my_pool, Connection#epgsql_connection.params),
+    {ok, _} = epgsql_pool:start(my_pool, 5, 10),
+
+    epgsql_pool:transaction(my_pool,
+                            fun(Worker) ->
+                                    {ok, _, []} = epgsql_pool:equery(Worker, ?SELECT_ITEMS_QUERY),
+                                    exit(Connection#epgsql_connection.connection_sock, forse_close_connection),
+                                    {ok, _, []} = epgsql_pool:equery(Worker, ?SELECT_ITEMS_QUERY)
+                            end),
+
+    ok = epgsql_pool:stop(my_pool),
     ok.
