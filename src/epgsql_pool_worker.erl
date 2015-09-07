@@ -34,12 +34,19 @@ init(PoolName) ->
 handle_call({equery, _, _}, _From, #state{connection = undefined} = State) ->
     {reply, {error, no_connection}, State};
 
-handle_call({equery, Stmt, Params}, _From, #state{connection = Connection} = State) ->
+handle_call({equery, _, _}, _From,
+            #state{connection = #epgsql_connection{sock = undefined}} = State) ->
+    {reply, {error, reconnecting}, State};
+
+handle_call({equery, Stmt, Params}, _From,
+            #state{connection = #epgsql_connection{sock = Sock}} = State) ->
     %% TStart = os:timestamp(),
-    Sock = Connection#epgsql_connection.sock,
-    Result = epgsql:equery(Sock, Stmt, Params),
+    Reply = case process_info(Sock, status) of
+                undefined -> {error, reconnecting};
+                {status, _} -> epgsql:equery(Sock, Stmt, Params)
+            end,
     %% Time = timer:now_diff(os:timestamp(), TStart),
-    {reply, Result, State};
+    {reply, Reply, State};
 
 handle_call(Message, _From, State) ->
     error_logger:error_msg("unknown call ~p in ~p ~n", [Message, ?MODULE]),
@@ -64,11 +71,11 @@ handle_info(open_connection, #state{pool_name = PoolName} = State) ->
     end;
 
 handle_info({'EXIT', Sock, Reason},
-            #state{connection = #epgsql_connection{sock = Sock}} = State) ->
+            #state{connection = #epgsql_connection{sock = Sock} = Connection} = State) ->
     error_logger:error_msg("DB Connection ~p EXIT with reason: ~p", [Sock, Reason]),
-    Connection = epgsql_pool_utils:close_connection(State#state.connection),
-    Connection2 = epgsql_pool_utils:reconnect(Connection),
-    {noreply, State#state{connection = Connection2}};
+    Connection2 = epgsql_pool_utils:close_connection(Connection),
+    Connection3 = epgsql_pool_utils:reconnect(Connection2),
+    {noreply, State#state{connection = Connection3}};
 
 handle_info(Message, State) ->
     error_logger:error_msg("unknown info ~p in ~p ~n", [Message, ?MODULE]),

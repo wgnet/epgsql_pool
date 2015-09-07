@@ -151,12 +151,28 @@ reconnect_test(Config) ->
     {state, my_pool, #epgsql_connection{sock = Sock1}} = sys:get_state(Worker),
     ct:pal("Worker: ~p, sock: ~p", [Worker, Sock1]),
 
-    {ok, _, []} = epgsql_pool:equery(Worker, ?SELECT_ITEMS_QUERY),
+    R1 = epgsql_pool:equery(Worker, ?SELECT_ITEMS_QUERY),
+    ct:pal("first query ~p", [R1]),
+    {ok, _, []} = R1,
 
+    ct:pal("~p close_connection", [Sock1]),
     exit(Sock1, close_connection),
-    timer:sleep(500),
 
-    {ok, _, []} = epgsql_pool:equery(Worker, "select * from item"),
+    R2 = epgsql_pool:equery(Worker, "select * from item"),
+    ct:pal("second query goes immediatelly ~p", [R2]),
+    {error, reconnecting} = R2,
+
+    timer:sleep(50),
+
+    R3 = epgsql_pool:equery(Worker, "select * from item"),
+    ct:pal("third query goes after 50 ms ~p", [R3]),
+    {error, reconnecting} = R3,
+
+    timer:sleep(150),
+
+    R4 = epgsql_pool:equery(Worker, "select * from item"),
+    ct:pal("fouth query goes after 200 ms ~p", [R4]),
+    {ok, _, []} = R4,
 
     {state, my_pool, #epgsql_connection{sock = Sock2}} = sys:get_state(Worker),
     ct:pal("Worker: ~p, sock: ~p", [Worker, Sock2]),

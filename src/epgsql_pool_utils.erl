@@ -27,6 +27,7 @@ open_connection(#epgsql_connection_params{host = Host, port = Port,
 
 
 -spec close_connection(#epgsql_connection{}) -> #epgsql_connection{}.
+close_connection(#epgsql_connection{sock = undefined} = Connection) -> Connection;
 close_connection(#epgsql_connection{sock = Sock} = Connection) ->
     epgsql:close(Sock),
     Connection#epgsql_connection{sock = undefined}.

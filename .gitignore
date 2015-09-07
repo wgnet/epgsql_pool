@@ -4,4 +4,4 @@ ebin
 deps/
 .rebar
 logs
-erl_crush.dump
+erl_crash.dump
