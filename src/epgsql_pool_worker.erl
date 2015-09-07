@@ -60,14 +60,13 @@ handle_cast(Message, State) ->
 
 
 -spec handle_info(gs_request(), gs_state()) -> gs_info_reply().
-handle_info(open_connection, #state{pool_name = PoolName} = State) ->
-    ConnectionParams = epgsql_pool_settings:get_connection_params(PoolName),
-    case epgsql_pool_utils:open_connection(ConnectionParams) of
-        {ok, Connection} -> {noreply, State#state{connection = Connection}};
-        {error, Reason, Connection} ->
-            error_logger:error_msg("Pool ~p could not to connect to DB:~p", [PoolName, Reason]),
-            Connection2 = epgsql_pool_utils:reconnect(Connection),
-            {noreply, State#state{connection = Connection2}}
+handle_info(open_connection, #state{pool_name = PoolName, connection = Connection} = State) ->
+    case epgsql_pool_utils:open_connection(PoolName, Connection) of
+        {ok, Connection2} -> {noreply, State#state{connection = Connection2}};
+        {error, Reason, Connection3} ->
+            error_logger:error_msg("Pool:~p, Worker:~p could not to connect to DB:~p", [PoolName, self(), Reason]),
+            Connection4 = epgsql_pool_utils:reconnect(Connection3),
+            {noreply, State#state{connection = Connection4}}
     end;
 
 handle_info({'EXIT', Sock, Reason},

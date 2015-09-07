@@ -10,15 +10,14 @@
 
 -export([all/0,
          init_per_suite/1, end_per_suite/1, init_per_testcase/2, end_per_testcase/2,
-         start_stop_test/1, equery_test/1, transaction_test/1, reconnect_test/1
+         equery_test/1, transaction_test/1, reconnect_test/1
         ]).
 
 -define(SELECT_ITEMS_QUERY, "SELECT id, category_id, title, num FROM item ORDER by id ASC").
 
 
 all() ->
-    [start_stop_test,
-     equery_test,
+    [equery_test,
      transaction_test,
      reconnect_test
     ].
@@ -36,34 +35,19 @@ end_per_suite(Config) ->
 
 init_per_testcase(_, Config) ->
     Params = #epgsql_connection_params{host = "localhost", port = 5432, username = "test", password = "test", database = "testdb"},
-    {ok, Connection} = epgsql_pool_utils:open_connection(Params),
-    #epgsql_connection{sock = Sock} = Connection,
-    epgsql:equery(Sock, "TRUNCATE TABLE item"),
-    epgsql:equery(Sock, "TRUNCATE TABLE category CASCADE"),
-    [{connection, Connection} | proplists:delete(connection, Config)].
+    epgsql_pool_settings:set_connection_params(my_pool, Params),
+    {ok, _} = epgsql_pool:start(my_pool, 5, 10),
+    epgsql_pool:equery(my_pool, "TRUNCATE TABLE item"),
+    epgsql_pool:equery(my_pool, "TRUNCATE TABLE category CASCADE"),
+    Config.
 
 
 end_per_testcase(_, Config) ->
-    Connection = proplists:get_value(connection, Config),
-    Connection2 = epgsql_pool_utils:close_connection(Connection),
-    #epgsql_connection{sock = undefined} = Connection2,
-    [{connection, Connection2} | proplists:delete(connection, Config)].
-
-
-start_stop_test(Config) ->
-    Params = #epgsql_connection_params{host = "localhost", port = 5432,
-                                       username="test", password="test",
-                                       database="testdb"},
-    epgsql_pool_settings:set_connection_params(my_pool, Params),
-    {ok, _} = epgsql_pool:start(my_pool, 5, 10),
     ok = epgsql_pool:stop(my_pool),
-    ok.
+    Config.
+
 
 equery_test(Config) ->
-    Connection = proplists:get_value(connection, Config),
-    epgsql_pool_settings:set_connection_params(my_pool, Connection#epgsql_connection.params),
-    {ok, _} = epgsql_pool:start(my_pool, 5, 10),
-
     {ok, 3, _, Ids} = epgsql_pool:equery(my_pool,
                                          "INSERT INTO category (title) "
                                          "VALUES ('cat 1'), ('cat 2'), ('cat 3') "
@@ -73,16 +57,10 @@ equery_test(Config) ->
     {ok, _, Rows} = epgsql_pool:equery(my_pool, "SELECT id, title FROM category ORDER by id ASC"),
     ct:pal("Rows ~p", [Rows]),
     ?assertEqual(WaitForRows, Rows),
-
-    ok = epgsql_pool:stop(my_pool),
     ok.
 
 
 transaction_test(Config) ->
-    Connection = proplists:get_value(connection, Config),
-    epgsql_pool_settings:set_connection_params(my_pool, Connection#epgsql_connection.params),
-    {ok, _} = epgsql_pool:start(my_pool, 5, 10),
-
     {FirstCatId, CatIds2, ItemIds2} =
         epgsql_pool:transaction(my_pool,
                                 fun(Worker) ->
@@ -137,16 +115,10 @@ transaction_test(Config) ->
 
     %% items not changes after calcelled transaction
     {ok, _, ItemRows} = epgsql_pool:equery(my_pool, ?SELECT_ITEMS_QUERY),
-
-    ok = epgsql_pool:stop(my_pool),
     ok.
 
 
 reconnect_test(Config) ->
-    Connection = proplists:get_value(connection, Config),
-    epgsql_pool_settings:set_connection_params(my_pool, Connection#epgsql_connection.params),
-    {ok, _} = epgsql_pool:start(my_pool, 5, 10),
-
     Worker = pooler:take_member(my_pool, 1000) ,
     {state, my_pool, #epgsql_connection{sock = Sock1}} = sys:get_state(Worker),
     ct:pal("Worker: ~p, sock: ~p", [Worker, Sock1]),
@@ -178,6 +150,4 @@ reconnect_test(Config) ->
     ct:pal("Worker: ~p, sock: ~p", [Worker, Sock2]),
 
     ?assertNotEqual(Sock1, Sock2),
-
-    ok = epgsql_pool:stop(my_pool),
     ok.

@@ -1,6 +1,6 @@
 -module(epgsql_pool_utils).
 
--export([open_connection/1,
+-export([open_connection/2,
          close_connection/1,
          reconnect/1,
          pool_name_to_atom/1
@@ -9,19 +9,20 @@
 -include("epgsql_pool.hrl").
 
 
--spec open_connection(#epgsql_connection_params{}) -> {ok, #epgsql_connection{}} | {error, term(), #epgsql_connection{}}.
-open_connection(#epgsql_connection_params{host = Host, port = Port,
-                                          username = Username,
-                                          password = Password,
-                                          database = Database} = ConnectionParams) ->
-    Connection0 = #epgsql_connection{params = ConnectionParams, reconnect_attempt = 0},
+-spec open_connection(atom(), #epgsql_connection{} | undefined) -> {ok, #epgsql_connection{}} | {error, term(), #epgsql_connection{}}.
+open_connection(PoolName, undefined) ->
+    open_connection(PoolName, #epgsql_connection{});
+open_connection(PoolName, Connection0) ->
+    Params = epgsql_pool_settings:get_connection_params(PoolName),
+    #epgsql_connection_params{host = Host, port = Port, username = Username,
+                              password = Password, database = Database} = Params,
     ConnectionTimeout = epgsql_pool_settings:get(connection_timeout),
     Res = epgsql:connect(Host, Username, Password,
                          [{port, Port},
                           {database, Database},
                           {timeout, ConnectionTimeout}]),
     case Res of
-        {ok, Sock} -> {ok, Connection0#epgsql_connection{sock = Sock}};
+        {ok, Sock} -> {ok, Connection0#epgsql_connection{sock = Sock, params = Params}};
         {error, Reason} -> {error, Reason, Connection0}
     end.
 
