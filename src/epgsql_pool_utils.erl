@@ -21,15 +21,15 @@ open_connection(#epgsql_connection_params{host = Host, port = Port,
                           {database, Database},
                           {timeout, ConnectionTimeout}]),
     case Res of
-        {ok, Sock} -> {ok, Connection0#epgsql_connection{connection_sock = Sock}};
+        {ok, Sock} -> {ok, Connection0#epgsql_connection{sock = Sock}};
         {error, Reason} -> {error, Reason, Connection0}
     end.
 
 
 -spec close_connection(#epgsql_connection{}) -> #epgsql_connection{}.
-close_connection(#epgsql_connection{connection_sock = Sock} = Connection) ->
+close_connection(#epgsql_connection{sock = Sock} = Connection) ->
     epgsql:close(Sock),
-    Connection#epgsql_connection{connection_sock = undefined}.
+    Connection#epgsql_connection{sock = undefined}.
 
 
 -spec reconnect(#epgsql_connection{}) -> #epgsql_connection{}.

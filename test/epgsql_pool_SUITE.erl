@@ -37,7 +37,7 @@ end_per_suite(Config) ->
 init_per_testcase(_, Config) ->
     Params = #epgsql_connection_params{host = "localhost", port = 5432, username = "test", password = "test", database = "testdb"},
     {ok, Connection} = epgsql_pool_utils:open_connection(Params),
-    #epgsql_connection{connection_sock = Sock} = Connection,
+    #epgsql_connection{sock = Sock} = Connection,
     epgsql:equery(Sock, "TRUNCATE TABLE item"),
     epgsql:equery(Sock, "TRUNCATE TABLE category CASCADE"),
     [{connection, Connection} | proplists:delete(connection, Config)].
@@ -46,7 +46,7 @@ init_per_testcase(_, Config) ->
 end_per_testcase(_, Config) ->
     Connection = proplists:get_value(connection, Config),
     Connection2 = epgsql_pool_utils:close_connection(Connection),
-    #epgsql_connection{connection_sock = undefined} = Connection2,
+    #epgsql_connection{sock = undefined} = Connection2,
     [{connection, Connection2} | proplists:delete(connection, Config)].
 
 
@@ -147,12 +147,21 @@ reconnect_test(Config) ->
     epgsql_pool_settings:set_connection_params(my_pool, Connection#epgsql_connection.params),
     {ok, _} = epgsql_pool:start(my_pool, 5, 10),
 
-    epgsql_pool:transaction(my_pool,
-                            fun(Worker) ->
-                                    {ok, _, []} = epgsql_pool:equery(Worker, ?SELECT_ITEMS_QUERY),
-                                    exit(Connection#epgsql_connection.connection_sock, forse_close_connection),
-                                    {ok, _, []} = epgsql_pool:equery(Worker, ?SELECT_ITEMS_QUERY)
-                            end),
+    Worker = pooler:take_member(my_pool, 1000) ,
+    {state, my_pool, #epgsql_connection{sock = Sock1}} = sys:get_state(Worker),
+    ct:pal("Worker: ~p, sock: ~p", [Worker, Sock1]),
+
+    {ok, _, []} = epgsql_pool:equery(Worker, ?SELECT_ITEMS_QUERY),
+
+    exit(Sock1, close_connection),
+    timer:sleep(500),
+
+    {ok, _, []} = epgsql_pool:equery(Worker, "select * from item"),
+
+    {state, my_pool, #epgsql_connection{sock = Sock2}} = sys:get_state(Worker),
+    ct:pal("Worker: ~p, sock: ~p", [Worker, Sock2]),
+
+    ?assertNotEqual(Sock1, Sock2),
 
     ok = epgsql_pool:stop(my_pool),
     ok.

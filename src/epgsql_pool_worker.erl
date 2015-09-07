@@ -24,8 +24,8 @@ start_link(PoolName0) ->
 
 -spec init(gs_args()) -> gs_init_reply().
 init(PoolName) ->
-    error_logger:info_msg("Init epgsql pool worker: ~p", [PoolName]),
     process_flag(trap_exit, true),
+    error_logger:info_msg("Init epgsql pool worker: ~p", [PoolName]),
     self() ! open_connection,
     {ok, #state{pool_name = PoolName}}.
 
@@ -36,7 +36,7 @@ handle_call({equery, _, _}, _From, #state{connection = undefined} = State) ->
 
 handle_call({equery, Stmt, Params}, _From, #state{connection = Connection} = State) ->
     %% TStart = os:timestamp(),
-    Sock = Connection#epgsql_connection.connection_sock,
+    Sock = Connection#epgsql_connection.sock,
     Result = epgsql:equery(Sock, Stmt, Params),
     %% Time = timer:now_diff(os:timestamp(), TStart),
     {reply, Result, State};
@@ -56,18 +56,16 @@ handle_cast(Message, State) ->
 handle_info(open_connection, #state{pool_name = PoolName} = State) ->
     ConnectionParams = epgsql_pool_settings:get_connection_params(PoolName),
     case epgsql_pool_utils:open_connection(ConnectionParams) of
-        {ok, Connection} ->
-            {noreply, State#state{connection = Connection}};
+        {ok, Connection} -> {noreply, State#state{connection = Connection}};
         {error, Reason, Connection} ->
             error_logger:error_msg("Pool ~p could not to connect to DB:~p", [PoolName, Reason]),
             Connection2 = epgsql_pool_utils:reconnect(Connection),
             {noreply, State#state{connection = Connection2}}
     end;
 
-handle_info({'EXIT', Pid, Reason},
-            #state{connection = #epgsql_connection{connection_sock = Sock}} = State)
-  when Pid == Sock ->
-    error_logger:error_msg("DB Connection ~p EXIT with reason: ~p", [Pid, Reason]),
+handle_info({'EXIT', Sock, Reason},
+            #state{connection = #epgsql_connection{sock = Sock}} = State) ->
+    error_logger:error_msg("DB Connection ~p EXIT with reason: ~p", [Sock, Reason]),
     Connection = epgsql_pool_utils:close_connection(State#state.connection),
     Connection2 = epgsql_pool_utils:reconnect(Connection),
     {noreply, State#state{connection = Connection2}};
