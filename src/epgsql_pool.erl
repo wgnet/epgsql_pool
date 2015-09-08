@@ -32,13 +32,16 @@ stop(PoolName) ->
 
 -spec equery(pool_name() | pid(), epgsql:sql_query()) -> epgsql:reply().
 equery(PoolNameOrWorker, Stmt) ->
-    equery(PoolNameOrWorker, Stmt, []).
+    equery(PoolNameOrWorker, Stmt, [], []).
 
 
-%% Example
-%% epgsql_pool:equery("my_db_pool", "SELECT NOW() as now", []).
 -spec equery(pool_name() | pid(), epgsql:sql_query(), [epgsql:bind_param()]) -> epgsql:reply().
-equery(Worker, Stmt, Params) when is_pid(Worker) ->
+equery(PoolNameOrWorker, Stmt, Params) ->
+    equery(PoolNameOrWorker, Stmt, Params, []).
+
+
+-spec equery(pool_name() | pid(), epgsql:sql_query(), [epgsql:bind_param()], [proplists:option()]) -> epgsql:reply().
+equery(Worker, Stmt, Params, Options) when is_pid(Worker) ->
     Timeout = epgsql_pool_settings:get(query_timeout),
     % TODO process timeout,
     % try-catch
@@ -47,22 +50,19 @@ equery(Worker, Stmt, Params) when is_pid(Worker) ->
     % reply to client with error
     % reconnect
     % return to pool
-    gen_server:call(Worker, {equery, Stmt, Params}, Timeout);
+    Res = gen_server:call(Worker, {equery, Stmt, Params}, Timeout),
+    ErrorHandler = proplists:get_value(error_handler, Options),
+    case {ErrorHandler, Res} of
+        {undefined, _} -> Res;
+        {Fun, {error, Error}} -> Fun(Worker, Stmt, Params, Error);
+        _ -> Res
+    end;
 
-equery(PoolName, Stmt, Params) ->
+equery(PoolName, Stmt, Params, Options) ->
     transaction(PoolName,
                 fun(Worker) ->
-                        equery(Worker, Stmt, Params)
+                        equery(Worker, Stmt, Params, Options)
                 end).
-
-
--spec equery(pool_name() | pid(), epgsql:sql_query(), [epgsql:bind_param()], fun()) -> epgsql:reply().
-equery(PoolName, Stmt, Params, ErrorHandler) ->
-    Res = equery(PoolName, Stmt, Params),
-    case Res of
-        {error, Error} -> ErrorHandler(PoolName, Stmt, Params, Error);
-        _ -> Res
-    end.
 
 
 -spec transaction(pool_name(), fun()) -> epgsql:reply() | {error, term()}.
@@ -72,13 +72,13 @@ transaction(PoolName0, Fun) ->
     case pooler:take_member(PoolName, Timeout) of
         Worker when is_pid(Worker) ->
             try
-                equery(Worker, "BEGIN", []),
+                equery(Worker, "BEGIN"),
                 Result = Fun(Worker),
-                equery(Worker, "COMMIT", []),
+                equery(Worker, "COMMIT"),
                 Result
             catch
                 Err:Reason ->
-                    equery(Worker, "ROLLBACK", []),
+                    equery(Worker, "ROLLBACK"),
                     erlang:raise(Err, Reason, erlang:get_stacktrace())
             after
                 pooler:return_member(PoolName, Worker, ok)

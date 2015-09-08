@@ -122,7 +122,7 @@ transaction_test(Config) ->
 
 reconnect_test(Config) ->
     Worker = pooler:take_member(my_pool, 1000) ,
-    {state, my_pool, #epgsql_connection{sock = Sock1}} = sys:get_state(Worker),
+    [state, my_pool, #epgsql_connection{sock = Sock1} | _]= tuple_to_list(sys:get_state(Worker)),
     ct:pal("Worker: ~p, sock: ~p", [Worker, Sock1]),
 
     R1 = epgsql_pool:equery(Worker, ?SELECT_ITEMS_QUERY),
@@ -148,7 +148,7 @@ reconnect_test(Config) ->
     ct:pal("fouth query goes after 200 ms ~p", [R4]),
     {ok, _, []} = R4,
 
-    {state, my_pool, #epgsql_connection{sock = Sock2}} = sys:get_state(Worker),
+    [state, my_pool, #epgsql_connection{sock = Sock2} | _]= tuple_to_list(sys:get_state(Worker)),
     ct:pal("Worker: ~p, sock: ~p", [Worker, Sock2]),
 
     ?assertNotEqual(Sock1, Sock2),
@@ -162,15 +162,14 @@ error_handler_test(Config) ->
 
     Query2 = "SELECT some_field FROM item WHERE id = $1",
     ErrorMessage2 = <<"column \"some_field\" does not exist">>,
-    ErrorHandler = fun(PoolName, Stmt, Params, Error2) ->
+    ErrorHandler = fun(_Worker, Stmt, Params, Error2) ->
                            ct:pal("ErrorHandler: ~p", [Error2]),
-                           ?assertEqual(my_pool, PoolName),
                            ?assertEqual(Query2, Stmt),
                            ?assertEqual([1], Params),
                            ?assertMatch(#error{severity = error, message = ErrorMessage2}, Error2),
                            {db_error, Error2#error.message}
                    end,
-    Res = epgsql_pool:equery(my_pool, Query2, [1], ErrorHandler),
+    Res = epgsql_pool:equery(my_pool, Query2, [1], [{error_handler, ErrorHandler}]),
     ct:pal("Res:~p", [Res]),
     ?assertEqual({db_error, ErrorMessage2}, Res),
 

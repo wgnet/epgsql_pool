@@ -14,3 +14,7 @@ tests:
 
 ct-clean:
 	rm -rf logs/*
+
+
+d:
+	dialyzer --src -I include src
