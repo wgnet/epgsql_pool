@@ -4,13 +4,14 @@
 %% and database should be inited with ./testdb_schema.sql
 
 -include("epgsql_pool.hrl").
+-include_lib("epgsql/include/epgsql.hrl").
 -include_lib("common_test/include/ct.hrl").
 -include_lib("eunit/include/eunit.hrl").
 
 
 -export([all/0,
          init_per_suite/1, end_per_suite/1, init_per_testcase/2, end_per_testcase/2,
-         equery_test/1, transaction_test/1, reconnect_test/1
+         equery_test/1, transaction_test/1, reconnect_test/1, error_handler_test/1
         ]).
 
 -define(SELECT_ITEMS_QUERY, "SELECT id, category_id, title, num FROM item ORDER by id ASC").
@@ -19,7 +20,8 @@
 all() ->
     [equery_test,
      transaction_test,
-     reconnect_test
+     reconnect_test,
+     error_handler_test
     ].
 
 
@@ -150,4 +152,26 @@ reconnect_test(Config) ->
     ct:pal("Worker: ~p, sock: ~p", [Worker, Sock2]),
 
     ?assertNotEqual(Sock1, Sock2),
+    ok.
+
+
+error_handler_test(Config) ->
+    {error, Error} = epgsql_pool:equery(my_pool, "SELECT id, title FROM some_table"),
+    ct:pal("Error:~p", [Error]),
+    ?assertMatch(#error{severity = error, message = <<"relation \"some_table\" does not exist">>}, Error),
+
+    Query2 = "SELECT some_field FROM item WHERE id = $1",
+    ErrorMessage2 = <<"column \"some_field\" does not exist">>,
+    ErrorHandler = fun(PoolName, Stmt, Params, Error2) ->
+                           ct:pal("ErrorHandler: ~p", [Error2]),
+                           ?assertEqual(my_pool, PoolName),
+                           ?assertEqual(Query2, Stmt),
+                           ?assertEqual([1], Params),
+                           ?assertMatch(#error{severity = error, message = ErrorMessage2}, Error2),
+                           {db_error, Error2#error.message}
+                   end,
+    Res = epgsql_pool:equery(my_pool, Query2, [1], ErrorHandler),
+    ct:pal("Res:~p", [Res]),
+    ?assertEqual({db_error, ErrorMessage2}, Res),
+
     ok.

@@ -1,7 +1,7 @@
 -module(epgsql_pool).
 
 -export([start/3, stop/1,
-         equery/2, equery/3,
+         equery/2, equery/3, equery/4,
          transaction/2
         ]).
 
@@ -54,6 +54,15 @@ equery(PoolName, Stmt, Params) ->
                 fun(Worker) ->
                         equery(Worker, Stmt, Params)
                 end).
+
+
+-spec equery(pool_name() | pid(), epgsql:sql_query(), [epgsql:bind_param()], fun()) -> epgsql:reply().
+equery(PoolName, Stmt, Params, ErrorHandler) ->
+    Res = equery(PoolName, Stmt, Params),
+    case Res of
+        {error, Error} -> ErrorHandler(PoolName, Stmt, Params, Error);
+        _ -> Res
+    end.
 
 
 -spec transaction(pool_name(), fun()) -> epgsql:reply() | {error, term()}.
