@@ -35,29 +35,23 @@ close_connection(#epgsql_connection{sock = Sock} = Connection) ->
 
 
 -spec reconnect(#epgsql_connection{}) -> #epgsql_connection{}.
-reconnect(#epgsql_connection{reconnect_attempt = Attempt,
-                             reconnect_timeout = Timeout0} = Connection) ->
-    MaxReconnectTimeout = epgsql_pool_settings:get(max_reconnect_timeout),
-    MinReconnectTimeout = epgsql_pool_settings:get(min_reconnect_timeout),
-    Timeout = if
-                  Timeout0 > MaxReconnectTimeout -> Timeout0;
-                  true -> exponential_backoff(Attempt, MinReconnectTimeout)
-              end,
-    reconnect_after(Attempt, MinReconnectTimeout, Timeout),
-    Connection#epgsql_connection{reconnect_attempt = Attempt + 1, reconnect_timeout = Timeout}.
+reconnect(#epgsql_connection{reconnect_attempt = Attempt} = Connection) ->
+    MaxTimeout = epgsql_pool_settings:get(max_reconnect_timeout),
+    MinTimeout = epgsql_pool_settings:get(min_reconnect_timeout),
+    Timeout = exponential_backoff(Attempt, 10, MinTimeout, MaxTimeout),
+    error_logger:info_msg("epgsql_pool reconnect after ~p attempt ~p", [Timeout, Attempt]),
+    erlang:send_after(Timeout, self(), open_connection),
+    Connection#epgsql_connection{reconnect_attempt = Attempt + 1}.
 
 
--spec reconnect_after(integer(), integer(), integer()) -> ok.
-reconnect_after(Attempt, TMin, TMax) ->
-    Delay = max(random:uniform(TMax), TMin),
-    error_logger:warning_msg("epgsql_pool reconnect after ~p attempt ~p", [Delay, Attempt]),
-    erlang:send_after(Delay, self(), open_connection),
-    ok.
-
-
--spec exponential_backoff(integer(), integer()) -> integer().
-exponential_backoff(N, T) ->
-    erlang:round(math:pow(2, N)) * T.
+-spec exponential_backoff(integer(), integer(), integer(), integer()) -> integer().
+exponential_backoff(Attempt, MaxAttempt, _BaseTimeout, MaxTimeout) when Attempt >= MaxAttempt ->
+    Half = MaxTimeout div 2,
+    Half + random:uniform(Half);
+exponential_backoff(Attempt, _MaxAttempt, BaseTimeout, MaxTimeout) ->
+    Timeout = min(erlang:round(math:pow(2, Attempt) * BaseTimeout), MaxTimeout),
+    Half = Timeout div 2,
+    Half + random:uniform(Half).
 
 
 -spec pool_name_to_atom(epgsql_pool:pool_name()) -> atom().

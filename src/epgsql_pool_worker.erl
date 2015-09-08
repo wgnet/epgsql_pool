@@ -24,8 +24,11 @@ start_link(PoolName0) ->
 
 -spec init(gs_args()) -> gs_init_reply().
 init(PoolName) ->
-    process_flag(trap_exit, true),
     error_logger:info_msg("Init epgsql pool worker: ~p", [PoolName]),
+    process_flag(trap_exit, true),
+
+    random:seed(now()),
+
     self() ! open_connection,
     {ok, #state{pool_name = PoolName}}.
 
@@ -68,6 +71,11 @@ handle_info(open_connection, #state{pool_name = PoolName, connection = Connectio
             Connection4 = epgsql_pool_utils:reconnect(Connection3),
             {noreply, State#state{connection = Connection4}}
     end;
+
+handle_info({'EXIT', _Sock, normal},
+            #state{connection = #epgsql_connection{sock = undefined}} = State) ->
+    do_nothing,
+    {noreply, State};
 
 handle_info({'EXIT', Sock, Reason},
             #state{connection = #epgsql_connection{sock = Sock} = Connection} = State) ->
