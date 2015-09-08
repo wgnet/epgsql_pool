@@ -7,9 +7,6 @@
 -include("epgsql_pool.hrl").
 -include("otp_types.hrl").
 
--type(epgsql_pool_settings_key() ::
-        connection_timeout | query_timeout | pooler_get_worker_timeout | max_reconnect_timeout | min_reconnect_timeout).
-
 
 %%% module API
 
@@ -33,7 +30,7 @@ set_connection_params(PoolName, Params) ->
     gen_server:call(?MODULE, {save, Key, Params}).
 
 
--spec get(epgsql_pool_settings_key()) -> integer().
+-spec get(atom()) -> integer().
 get(Key) ->
     case ets:lookup(?MODULE, {settings, Key}) of
         [] -> throw({settings_not_found, Key});
@@ -41,7 +38,7 @@ get(Key) ->
     end.
 
 
--spec set(epgsql_pool_settings_key(), integer()) -> ok.
+-spec set(atom(), integer()) -> ok.
 set(Key, Value) ->
     gen_server:call(?MODULE, {save, {settings, Key}, Value}).
 
@@ -56,6 +53,7 @@ init([]) ->
     ets:insert(T, {{settings, pooler_get_worker_timeout}, 1000}),
     ets:insert(T, {{settings, max_reconnect_timeout}, 5000}),
     ets:insert(T, {{settings, min_reconnect_timeout}, 100}),
+    ets:insert(T, {{settings, keep_alive_timeout}, 60000}),
     {ok, T}.
 
 

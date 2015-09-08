@@ -9,7 +9,10 @@
 -include("otp_types.hrl").
 
 -record(state, {pool_name :: atom(),
-                connection :: #epgsql_connection{}
+                connection :: #epgsql_connection{},
+                keep_alive_query_ref :: reference(), % ref to async keep-alive query to DB
+                send_keep_alive_timer :: reference(), % timer to send keep-alive query to DB
+                no_reply_keep_alive_timer :: reference() % timer to wait for reply from DB
                }).
 
 %% Module API
@@ -26,11 +29,11 @@ start_link(PoolName0) ->
 init(PoolName) ->
     error_logger:info_msg("Init epgsql pool worker: ~p", [PoolName]),
     process_flag(trap_exit, true),
-
     random:seed(now()),
-
     self() ! open_connection,
-    {ok, #state{pool_name = PoolName}}.
+    {ok, #state{pool_name = PoolName,
+                send_keep_alive_timer = make_ref(), % no need to check for undefined in cancel_timer
+                no_reply_keep_alive_timer = make_ref()}}.
 
 
 -spec handle_call(gs_request(), gs_from(), gs_reply()) -> gs_call_reply().
@@ -63,14 +66,58 @@ handle_cast(Message, State) ->
 
 
 -spec handle_info(gs_request(), gs_state()) -> gs_info_reply().
-handle_info(open_connection, #state{pool_name = PoolName, connection = Connection} = State) ->
+handle_info(open_connection, #state{pool_name = PoolName, connection = Connection,
+                                    send_keep_alive_timer = Send_KA_Timer} = State) ->
     case epgsql_pool_utils:open_connection(PoolName, Connection) of
-        {ok, Connection2} -> {noreply, State#state{connection = Connection2}};
+        {ok, Connection2} ->
+            KeepAliveTimeout = epgsql_pool_settings:get(keep_alive_timeout),
+            erlang:cancel_timer(Send_KA_Timer),
+            Send_KA_Timer2 = erlang:send_after(KeepAliveTimeout, self(), keep_alive),
+            {noreply, State#state{connection = Connection2, send_keep_alive_timer = Send_KA_Timer2}};
         {error, Reason, Connection3} ->
             error_logger:error_msg("Pool:~p, Worker:~p could not to connect to DB:~p", [PoolName, self(), Reason]),
             Connection4 = epgsql_pool_utils:reconnect(Connection3),
             {noreply, State#state{connection = Connection4}}
     end;
+
+handle_info(keep_alive, #state{connection = #epgsql_connection{sock = undefined}} = State) ->
+    do_nothing,
+    {noreply, State};
+
+handle_info(keep_alive, #state{connection = #epgsql_connection{sock = Sock},
+                               no_reply_keep_alive_timer = NR_KA_Timer} = State) ->
+    %% send async keep-alive query to DB
+    KA_Ref = epgsqli:squery(Sock, <<"SELECT 1">>),
+
+    KeepAliveTimeout = epgsql_pool_settings:get(keep_alive_timeout),
+    erlang:cancel_timer(NR_KA_Timer),
+    NR_KA_Timer2 = erlang:send_after(KeepAliveTimeout * 2, self(), no_reply_to_keep_alive),
+    {noreply, State#state{keep_alive_query_ref = KA_Ref, no_reply_keep_alive_timer = NR_KA_Timer2}};
+
+handle_info({_Pid, Ref, done}, #state{keep_alive_query_ref = Ref,
+                                      send_keep_alive_timer = Send_KA_Timer,
+                                      no_reply_keep_alive_timer = NR_KA_Timer} = State) ->
+    %% got reply to asycn keep-alive query from DB
+    KeepAliveTimeout = epgsql_pool_settings:get(keep_alive_timeout),
+    erlang:cancel_timer(Send_KA_Timer),
+    erlang:cancel_timer(NR_KA_Timer),
+    Send_KA_Timer2 = erlang:send_after(KeepAliveTimeout, self(), keep_alive),
+    {noreply, State#state{send_keep_alive_timer = Send_KA_Timer2}};
+
+handle_info({_Pid, Ref, _Reply}, #state{keep_alive_query_ref = Ref} = State) ->
+    do_nothing,
+    {noreply, State};
+
+handle_info(no_reply_to_keep_alive, #state{connection = Connection,
+                                           send_keep_alive_timer = Send_KA_Timer,
+                                           no_reply_keep_alive_timer = NR_KA_Timer} = State) ->
+    %% no reply to asycn keep-alive query from DB
+    error_logger:error_msg("DB Connection, no_reply_to_keep_alive"),
+    erlang:cancel_timer(Send_KA_Timer),
+    erlang:cancel_timer(NR_KA_Timer),
+    Connection2 = epgsql_pool_utils:close_connection(Connection),
+    Connection3 = epgsql_pool_utils:reconnect(Connection2),
+    {noreply, State#state{connection = Connection3}};
 
 handle_info({'EXIT', _Sock, normal},
             #state{connection = #epgsql_connection{sock = undefined}} = State) ->

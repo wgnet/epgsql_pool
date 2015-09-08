@@ -31,7 +31,7 @@ open_connection(PoolName, Connection0) ->
 close_connection(#epgsql_connection{sock = undefined} = Connection) -> Connection;
 close_connection(#epgsql_connection{sock = Sock} = Connection) ->
     epgsql:close(Sock),
-    Connection#epgsql_connection{sock = undefined}.
+    Connection#epgsql_connection{sock = undefined, reconnect_attempt = 0}.
 
 
 -spec reconnect(#epgsql_connection{}) -> #epgsql_connection{}.

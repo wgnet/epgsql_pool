@@ -23,7 +23,7 @@ test_run() ->
     Params = #epgsql_connection_params{host = "localhost",
                                        port = 5432,
                                        username = "test",
-                                       password = "invalidpass",
+                                       password = "test",
                                        database = "testdb"},
     epgsql_pool_settings:set_connection_params(my_pool, Params),
     {ok, _} = epgsql_pool:start(my_pool, 1, 2),
