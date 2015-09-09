@@ -48,3 +48,14 @@ connection_params_test() ->
 
     epgsql_pool_settings ! stop,
     ok.
+
+
+monitoring_callback_test() ->
+    epgsql_pool_settings:start_link(),
+
+    ?assertEqual(undefined, epgsql_pool_settings:get_monitoring_callback()),
+    Callback = fun(Event) -> Event end,
+    ?assertEqual(ok, epgsql_pool_settings:set_monitoring_callback(Callback)),
+    ?assertEqual(Callback, epgsql_pool_settings:get_monitoring_callback()),
+
+    ok.
