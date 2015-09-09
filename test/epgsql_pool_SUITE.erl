@@ -11,7 +11,7 @@
 
 -export([all/0,
          init_per_suite/1, end_per_suite/1, init_per_testcase/2, end_per_testcase/2,
-         query_test/1, transaction_test/1, reconnect_test/1, timeout_test/1
+         query_test/1, transaction_test/1, reconnect_test/1, timeout_test/1, validate_connection_params_test/1
         ]).
 
 -define(SELECT_ITEMS_QUERY, "SELECT id, category_id, title, num FROM item ORDER by id ASC").
@@ -21,7 +21,8 @@ all() ->
     [query_test,
      transaction_test,
      reconnect_test,
-     timeout_test
+     timeout_test,
+     validate_connection_params_test
     ].
 
 
@@ -172,4 +173,23 @@ timeout_test(_Config) ->
     Res2 = epgsql_pool:query(my_pool, "SELECT pg_sleep(1)", [], [{timeout, 500}]),
     ct:pal("Res2:~p", [Res2]),
     ?assertEqual({error, timeout}, Res2),
+    ok.
+
+
+validate_connection_params_test(_Config) ->
+    Params1 = #epgsql_connection_params{host = "localhost", port = 5432, username = "test", password = "test", database = "testdb"},
+    Res1 = epgsql_pool:validate_connection_params(Params1),
+    ct:pal("Res1: ~p", [Res1]),
+    ?assertEqual(ok, Res1),
+
+    Params2 = #epgsql_connection_params{host = "localhost", port = 5432, username = "test", password = "some", database = "testdb"},
+    Res2 = epgsql_pool:validate_connection_params(Params2),
+    ct:pal("Res2: ~p", [Res2]),
+    ?assertEqual({error,invalid_password}, Res2),
+
+    Params3 = #epgsql_connection_params{host = "localhost", port = 5432, username = "test", password = "test", database = "some"},
+    Res3 = epgsql_pool:validate_connection_params(Params3),
+    ct:pal("Res3: ~p", [Res3]),
+    ?assertEqual({error,{error,fatal,<<"3D000">>,<<"database \"some\" does not exist">>, []}}, Res3),
+
     ok.

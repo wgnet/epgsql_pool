@@ -1,6 +1,7 @@
 -module(epgsql_pool).
 
 -export([start/3, stop/1,
+         validate_connection_params/1,
          query/2, query/3, query/4,
          transaction/2
         ]).
@@ -28,6 +29,20 @@ start(PoolName0, InitCount, MaxCount) ->
 -spec stop(pool_name()) -> ok | {error, term()}.
 stop(PoolName) ->
     pooler:rm_pool(epgsql_pool_utils:pool_name_to_atom(PoolName)).
+
+
+-spec validate_connection_params(#epgsql_connection_params{}) -> ok | {error, term()}.
+validate_connection_params(#epgsql_connection_params{host = Host, port = Port, username = Username,
+                                                     password = Password, database = Database}) ->
+    ConnectionTimeout = epgsql_pool_settings:get(connection_timeout),
+    Res = epgsql:connect(Host, Username, Password,
+                         [{port, Port},
+                          {database, Database},
+                          {timeout, ConnectionTimeout}]),
+    case Res of
+        {ok, Sock} -> epgsql:close(Sock), ok;
+        {error, Reason} -> {error, Reason}
+    end.
 
 
 -spec query(pool_name() | pid(), epgsql:sql_query()) -> epgsql:reply().
