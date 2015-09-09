@@ -11,17 +11,17 @@
 
 -export([all/0,
          init_per_suite/1, end_per_suite/1, init_per_testcase/2, end_per_testcase/2,
-         equery_test/1, transaction_test/1, reconnect_test/1, error_handler_test/1
+         query_test/1, transaction_test/1, reconnect_test/1, timeout_test/1
         ]).
 
 -define(SELECT_ITEMS_QUERY, "SELECT id, category_id, title, num FROM item ORDER by id ASC").
 
 
 all() ->
-    [equery_test,
+    [query_test,
      transaction_test,
      reconnect_test,
-     error_handler_test
+     timeout_test
     ].
 
 
@@ -39,8 +39,8 @@ init_per_testcase(_, Config) ->
     Params = #epgsql_connection_params{host = "localhost", port = 5432, username = "test", password = "test", database = "testdb"},
     epgsql_pool_settings:set_connection_params(my_pool, Params),
     {ok, _} = epgsql_pool:start(my_pool, 5, 10),
-    epgsql_pool:equery(my_pool, "TRUNCATE TABLE item"),
-    epgsql_pool:equery(my_pool, "TRUNCATE TABLE category CASCADE"),
+    epgsql_pool:query(my_pool, "TRUNCATE TABLE item"),
+    epgsql_pool:query(my_pool, "TRUNCATE TABLE category CASCADE"),
     Config.
 
 
@@ -49,16 +49,25 @@ end_per_testcase(_, Config) ->
     Config.
 
 
-equery_test(Config) ->
-    {ok, 3, _, Ids} = epgsql_pool:equery(my_pool,
-                                         "INSERT INTO category (title) "
-                                         "VALUES ('cat 1'), ('cat 2'), ('cat 3') "
-                                         "RETURNING id"),
+query_test(Config) ->
+    {ok, 3, _, Ids} = epgsql_pool:query(my_pool,
+                                        "INSERT INTO category (title) "
+                                        "VALUES ('cat 1'), ('cat 2'), ('cat 3') "
+                                        "RETURNING id"),
     WaitForRows = lists:map(fun({{Id}, Title}) -> {Id, Title} end,
                             lists:zip(Ids, [<<"cat 1">>, <<"cat 2">>, <<"cat 3">>])),
-    {ok, _, Rows} = epgsql_pool:equery(my_pool, "SELECT id, title FROM category ORDER by id ASC"),
+    {ok, _, Rows} = epgsql_pool:query(my_pool, "SELECT id, title FROM category ORDER by id ASC"),
     ct:pal("Rows ~p", [Rows]),
     ?assertEqual(WaitForRows, Rows),
+
+    [{Id1}, {Id2} | _] = Ids,
+    {ok, _, Rows2} = epgsql_pool:query(my_pool, "SELECT id, title FROM category WHERE id = $1 OR id = $2 ORDER BY id ASC", [Id1, Id2]),
+    ct:pal("Rows2 ~p", [Rows2]),
+    ?assertEqual([{Id1, <<"cat 1">>}, {Id2, <<"cat 2">>}], Rows2),
+
+    {error, Error} = epgsql_pool:query(my_pool, "SELECT id, title FROM some_table"),
+    ct:pal("Error:~p", [Error]),
+    ?assertMatch(#error{severity = error, message = <<"relation \"some_table\" does not exist">>}, Error),
     ok.
 
 
@@ -68,28 +77,28 @@ transaction_test(Config) ->
                                 fun(Worker) ->
                                         ct:pal("worker:~p", [Worker]),
                                         {ok, 3, _, CatIds0} =
-                                            epgsql_pool:equery(Worker,
-                                                               "INSERT INTO category (title) "
-                                                               "VALUES ('cat 4'), ('cat 5'), ('cat 6') "
-                                                               "RETURNING id"),
+                                            epgsql_pool:query(Worker,
+                                                              "INSERT INTO category (title) "
+                                                              "VALUES ('cat 4'), ('cat 5'), ('cat 6') "
+                                                              "RETURNING id"),
                                         CatIds1 = lists:map(fun({Cid}) -> Cid end, CatIds0),
                                         CatId = hd(CatIds1),
                                         {ok, 2, _, ItemIds0} =
-                                            epgsql_pool:equery(Worker,
-                                                               "INSERT INTO item (category_id, title, num) "
-                                                               "VALUES ($1, 'item 1', 5), ($1, 'item 2', 7) "
-                                                               "RETURNING id", [CatId]),
+                                            epgsql_pool:query(Worker,
+                                                              "INSERT INTO item (category_id, title, num) "
+                                                              "VALUES ($1, 'item 1', 5), ($1, 'item 2', 7) "
+                                                              "RETURNING id", [CatId]),
                                         ItemIds1 = lists:map(fun({Iid}) -> Iid end, ItemIds0),
                                         {CatId, CatIds1, ItemIds1}
                                 end),
     WaitForCats = lists:zip(CatIds2, [<<"cat 4">>, <<"cat 5">>, <<"cat 6">>]),
-    {ok, _, CatRows} = epgsql_pool:equery(my_pool, "SELECT id, title FROM category ORDER by id ASC"),
+    {ok, _, CatRows} = epgsql_pool:query(my_pool, "SELECT id, title FROM category ORDER by id ASC"),
     ct:pal("CatRows ~p", [CatRows]),
     ?assertEqual(WaitForCats, CatRows),
 
     WaitForItems = lists:map(fun({ItemId, {Title, Num}}) -> {ItemId, FirstCatId, Title, Num} end,
                              lists:zip(ItemIds2, [{<<"item 1">>, 5}, {<<"item 2">>, 7}])),
-    {ok, _, ItemRows} = epgsql_pool:equery(my_pool, ?SELECT_ITEMS_QUERY),
+    {ok, _, ItemRows} = epgsql_pool:query(my_pool, ?SELECT_ITEMS_QUERY),
     ct:pal("ItemRows ~p", [ItemRows]),
     ?assertEqual(WaitForItems, ItemRows),
 
@@ -98,11 +107,11 @@ transaction_test(Config) ->
                                 fun(Worker) ->
                                         ct:pal("worker:~p", [Worker]),
                                         {ok, 2} =
-                                            epgsql_pool:equery(Worker,
-                                                               "INSERT INTO item (category_id, title, num) "
-                                                               "VALUES ($1, 'item 3', 55), ($1, 'item 4', 77) ",
-                                                               [FirstCatId]),
-                                        {ok, _, ItemRows2} = epgsql_pool:equery(Worker, ?SELECT_ITEMS_QUERY),
+                                            epgsql_pool:query(Worker,
+                                                              "INSERT INTO item (category_id, title, num) "
+                                                              "VALUES ($1, 'item 3', 55), ($1, 'item 4', 77) ",
+                                                              [FirstCatId]),
+                                        {ok, _, ItemRows2} = epgsql_pool:query(Worker, ?SELECT_ITEMS_QUERY),
                                         ct:pal("ItemRows2 ~p", [ItemRows2]),
                                         ?assertMatch([{_, FirstCatId, <<"item 1">>, 5},
                                                       {_, FirstCatId, <<"item 2">>, 7},
@@ -116,7 +125,7 @@ transaction_test(Config) ->
     end,
 
     %% items not changes after calcelled transaction
-    {ok, _, ItemRows} = epgsql_pool:equery(my_pool, ?SELECT_ITEMS_QUERY),
+    {ok, _, ItemRows} = epgsql_pool:query(my_pool, ?SELECT_ITEMS_QUERY),
     ok.
 
 
@@ -125,26 +134,26 @@ reconnect_test(Config) ->
     [state, my_pool, #epgsql_connection{sock = Sock1} | _]= tuple_to_list(sys:get_state(Worker)),
     ct:pal("Worker: ~p, sock: ~p", [Worker, Sock1]),
 
-    R1 = epgsql_pool:equery(Worker, ?SELECT_ITEMS_QUERY),
+    R1 = epgsql_pool:query(Worker, ?SELECT_ITEMS_QUERY),
     ct:pal("first query ~p", [R1]),
     {ok, _, []} = R1,
 
     ct:pal("~p close_connection", [Sock1]),
     exit(Sock1, close_connection),
 
-    R2 = epgsql_pool:equery(Worker, "select * from item"),
+    R2 = epgsql_pool:query(Worker, "select * from item"),
     ct:pal("second query goes immediatelly ~p", [R2]),
     {error, reconnecting} = R2,
 
     timer:sleep(50),
 
-    R3 = epgsql_pool:equery(Worker, "select * from item"),
+    R3 = epgsql_pool:query(Worker, "select * from item"),
     ct:pal("third query goes after 50 ms ~p", [R3]),
     {error, reconnecting} = R3,
 
     timer:sleep(150),
 
-    R4 = epgsql_pool:equery(Worker, "select * from item"),
+    R4 = epgsql_pool:query(Worker, "select * from item"),
     ct:pal("fouth query goes after 200 ms ~p", [R4]),
     {ok, _, []} = R4,
 
@@ -155,22 +164,6 @@ reconnect_test(Config) ->
     ok.
 
 
-error_handler_test(Config) ->
-    {error, Error} = epgsql_pool:equery(my_pool, "SELECT id, title FROM some_table"),
-    ct:pal("Error:~p", [Error]),
-    ?assertMatch(#error{severity = error, message = <<"relation \"some_table\" does not exist">>}, Error),
-
-    Query2 = "SELECT some_field FROM item WHERE id = $1",
-    ErrorMessage2 = <<"column \"some_field\" does not exist">>,
-    ErrorHandler = fun(_Worker, Stmt, Params, Error2) ->
-                           ct:pal("ErrorHandler: ~p", [Error2]),
-                           ?assertEqual(Query2, Stmt),
-                           ?assertEqual([1], Params),
-                           ?assertMatch(#error{severity = error, message = ErrorMessage2}, Error2),
-                           {db_error, Error2#error.message}
-                   end,
-    Res = epgsql_pool:equery(my_pool, Query2, [1], [{error_handler, ErrorHandler}]),
-    ct:pal("Res:~p", [Res]),
-    ?assertEqual({db_error, ErrorMessage2}, Res),
+timeout_test(_Config) ->
 
     ok.

@@ -27,5 +27,8 @@ test_run() ->
                                        database = "testdb"},
     epgsql_pool_settings:set_connection_params(my_pool, Params),
     {ok, _} = epgsql_pool:start(my_pool, 1, 2),
-
+    Res1 = epgsql_pool:query(my_pool, "select * from category"),
+    error_logger:info_msg("~p", [Res1]),
+    Res2 = epgsql_pool:query(my_pool, "select * from category where id = $1", [1], [{timeout, 200}]),
+    error_logger:info_msg("~p", [Res2]),
     ok.
