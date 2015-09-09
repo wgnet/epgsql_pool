@@ -9,7 +9,7 @@ get_set_test() ->
 
     ?assertEqual(10000, epgsql_pool_settings:get(connection_timeout)),
     ?assertEqual(10000, epgsql_pool_settings:get(query_timeout)),
-    ?assertEqual(1000, epgsql_pool_settings:get(pooler_get_worker_timeout)),
+    ?assertEqual(10000, epgsql_pool_settings:get(pooler_get_worker_timeout)),
 
     epgsql_pool_settings:set(connection_timeout, 5000),
     ?assertEqual(5000, epgsql_pool_settings:get(connection_timeout)),

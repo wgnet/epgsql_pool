@@ -46,16 +46,16 @@ query(Worker, Stmt, Params, Options) when is_pid(Worker) ->
                   undefined -> epgsql_pool_settings:get(query_timeout);
                   V -> V
               end,
-    error_logger:info_msg("Worker:~p Stmt:~p Params:~p", [Worker, Stmt, Params]), %% TEMP
-    %% TODO process timeout,
-    %% try-catch
-    %% send cancel
-    %% log error
-    %% reply to client with error
-    %% reconnect
-    %% return to pool
-    Res = gen_server:call(Worker, {query, Stmt, Params}, Timeout),
-    Res;
+    %% TStart = os:timestamp(),
+    %% Time = timer:now_diff(os:timestamp(), TStart),
+    try
+        gen_server:call(Worker, {equery, Stmt, Params}, Timeout)
+    catch
+        exit:{timeout, _} ->
+            gen_server:call(Worker, cancel),
+            error_logger:error_msg("query timeout ~p ~p", [Stmt, Params]),
+            {error, timeout}
+    end;
 
 query(PoolName, Stmt, Params, Options) ->
     case get_worker(PoolName) of
@@ -69,13 +69,13 @@ transaction(PoolName, Fun) ->
     case get_worker(PoolName) of
         {ok, Worker} ->
             try
-                gen_server:call(Worker, {query, "BEGIN", []}),
+                gen_server:call(Worker, {squery, "BEGIN"}),
                 Result = Fun(Worker),
-                gen_server:call(Worker, {query, "COMMIT", []}),
+                gen_server:call(Worker, {squery, "COMMIT"}),
                 Result
             catch
                 Err:Reason ->
-                    gen_server:call(Worker, {query, "ROLLBACK", []}),
+                    gen_server:call(Worker, {squery, "ROLLBACK"}),
                     erlang:raise(Err, Reason, erlang:get_stacktrace())
             after
                 pooler:return_member(PoolName, Worker, ok)

@@ -50,7 +50,7 @@ init([]) ->
     T = ets:new(?MODULE, [protected, named_table]),
     ets:insert(T, {{settings, connection_timeout}, 10000}),
     ets:insert(T, {{settings, query_timeout}, 10000}),
-    ets:insert(T, {{settings, pooler_get_worker_timeout}, 1000}),
+    ets:insert(T, {{settings, pooler_get_worker_timeout}, 10000}),
     ets:insert(T, {{settings, max_reconnect_timeout}, 5000}),
     ets:insert(T, {{settings, min_reconnect_timeout}, 100}),
     ets:insert(T, {{settings, keep_alive_timeout}, 60000}),

@@ -165,5 +165,11 @@ reconnect_test(Config) ->
 
 
 timeout_test(_Config) ->
+    Res1 = epgsql_pool:query(my_pool, "SELECT pg_sleep(1)", [], [{timeout, 2000}]),
+    ct:pal("Res1:~p", [Res1]),
+    ?assertMatch({ok, _, _}, Res1),
 
+    Res2 = epgsql_pool:query(my_pool, "SELECT pg_sleep(1)", [], [{timeout, 500}]),
+    ct:pal("Res2:~p", [Res2]),
+    ?assertEqual({error, timeout}, Res2),
     ok.

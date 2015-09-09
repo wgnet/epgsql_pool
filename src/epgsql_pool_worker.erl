@@ -37,29 +37,31 @@ init(PoolName) ->
 
 
 -spec handle_call(gs_request(), gs_from(), gs_reply()) -> gs_call_reply().
-handle_call({query, _, _}, _From, #state{connection = undefined} = State) ->
+handle_call(_, _From, #state{connection = undefined} = State) ->
     {reply, {error, no_connection}, State};
 
-handle_call({query, _, _}, _From,
-            #state{connection = #epgsql_connection{sock = undefined}} = State) ->
+handle_call(_, _From, #state{connection = #epgsql_connection{sock = undefined}} = State) ->
     {reply, {error, reconnecting}, State};
 
-handle_call({query, Stmt, Params}, _From,
+handle_call({equery, Stmt, Params}, _From,
             #state{connection = #epgsql_connection{sock = Sock}} = State) ->
-    %% TStart = os:timestamp(),
-    %% timer:sleep(1000), %% TEMP
     Reply = case process_info(Sock, status) of
                 undefined -> {error, reconnecting};
-                {status, _} ->
-                    case Stmt of
-                        "BEGIN" -> epgsql:squery(Sock, Stmt); % skip Stmt parsing
-                        "COMMIT" -> epgsql:squery(Sock, Stmt);
-                        "ROLLBACK" -> epgsql:squery(Sock, Stmt);
-                        _ -> epgsql:equery(Sock, Stmt, Params)
-                    end
+                {status, _} -> epgsql:equery(Sock, Stmt, Params)
             end,
-    %% Time = timer:now_diff(os:timestamp(), TStart),
     {reply, Reply, State};
+
+handle_call({squery, Stmt}, _From,
+            #state{connection = #epgsql_connection{sock = Sock}} = State) ->
+    Reply = case process_info(Sock, status) of
+                undefined -> {error, reconnecting};
+                {status, _} -> epgsql:squery(Sock, Stmt)
+            end,
+    {reply, Reply, State};
+
+handle_call(cancel, _From, #state{connection = #epgsql_connection{sock = Sock}} = State) ->
+    epgsql:cancel(Sock),
+    {reply, ok, State};
 
 handle_call(Message, _From, State) ->
     error_logger:error_msg("unknown call ~p in ~p ~n", [Message, ?MODULE]),
