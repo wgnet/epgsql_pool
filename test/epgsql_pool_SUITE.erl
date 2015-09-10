@@ -12,7 +12,7 @@
 -export([all/0,
          init_per_suite/1, end_per_suite/1, init_per_testcase/2, end_per_testcase/2,
          query_test/1, transaction_test/1, reconnect_test/1, timeout_test/1,
-         validate_connection_params_test/1, monitoring_callback_test/1
+         validate_connection_params_test/1
         ]).
 
 -define(SELECT_ITEMS_QUERY, "SELECT id, category_id, title, num FROM item ORDER by id ASC").
@@ -23,8 +23,7 @@ all() ->
      transaction_test,
      reconnect_test,
      timeout_test,
-     validate_connection_params_test,
-     monitoring_callback_test
+     validate_connection_params_test
     ].
 
 
@@ -196,36 +195,5 @@ validate_connection_params_test(_Config) ->
     Res3 = epgsql_pool:validate_connection_params(Params3),
     ct:pal("Res3: ~p", [Res3]),
     ?assertEqual({error,{error,fatal,<<"3D000">>,<<"database \"some\" does not exist">>, []}}, Res3),
-
-    ok.
-
-
-monitoring_callback_test(_Config) ->
-    Callback = fun({db_query_time, Time}) ->
-                       ct:pal("db_query_time ~p", [Time]),
-                       put(db_query_time, true); % use process dictionary
-                  ({db_query_error, _Stmt, _Params, Error}) ->
-                       ct:pal("db_query_error ~p", [Error]),
-                       put(db_query_error, true);
-                  ({db_query_timeout, _Stmt, _Params}) ->
-                       ct:pal("db_query_timeout"),
-                       put(db_query_timeout, true)
-               end,
-    epgsql_pool:set_monitoring_callback(Callback),
-
-    Res1 = epgsql_pool:query(my_pool, ?SELECT_ITEMS_QUERY),
-    ct:pal("Res1:~p", [Res1]),
-    ?assertMatch({ok, _, _}, Res1),
-    ?assertEqual(true, get(db_query_time)),
-
-    Res2 = epgsql_pool:query(my_pool, "SELECT * FROM blablabla"),
-    ct:pal("Res2:~p", [Res2]),
-    ?assertMatch({error, #error{}}, Res2),
-    ?assertEqual(true, get(db_query_error)),
-
-    Res3 = epgsql_pool:query(my_pool, "SELECT pg_sleep(1)", [], [{timeout, 500}]),
-    ct:pal("Res3:~p", [Res3]),
-    ?assertEqual({error, timeout}, Res3),
-    ?assertEqual(true, get(db_query_timeout)),
 
     ok.

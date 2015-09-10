@@ -4,8 +4,6 @@
 -export([start_link/0,
          get_connection_params/1,
          set_connection_params/2,
-         get_monitoring_callback/0,
-         set_monitoring_callback/1,
          get/1, set/2]).
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2, terminate/2, code_change/3]).
 
@@ -33,19 +31,6 @@ get_connection_params(PoolName) ->
 set_connection_params(PoolName, Params) ->
     Key = {connection, epgsql_pool_utils:pool_name_to_atom(PoolName)},
     gen_server:call(?MODULE, {save, Key, Params}).
-
-
--spec get_monitoring_callback() -> fun() | undefined.
-get_monitoring_callback() ->
-    case ets:lookup(?MODULE, monitoring_callback) of
-        [] -> undefined;
-        [{monitoring_callback, Callback}] -> Callback
-    end.
-
-
--spec set_monitoring_callback(fun()) -> ok.
-set_monitoring_callback(Callback) ->
-    gen_server:call(?MODULE, {save, monitoring_callback, Callback}).
 
 
 -spec get(atom()) -> integer().

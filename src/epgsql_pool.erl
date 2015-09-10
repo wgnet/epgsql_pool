@@ -2,7 +2,6 @@
 
 -export([start/3, stop/1,
          validate_connection_params/1,
-         set_monitoring_callback/1,
          query/2, query/3, query/4,
          transaction/2
         ]).
@@ -46,11 +45,6 @@ validate_connection_params(#epgsql_connection_params{host = Host, port = Port, u
     end.
 
 
--spec set_monitoring_callback(fun()) -> ok.
-set_monitoring_callback(Callback) ->
-    epgsql_pool_settings:set_monitoring_callback(Callback).
-
-
 -spec query(pool_name() | pid(), epgsql:sql_query()) -> epgsql:reply().
 query(PoolNameOrWorker, Stmt) ->
     query(PoolNameOrWorker, Stmt, [], []).
@@ -68,21 +62,11 @@ query(Worker, Stmt, Params, Options) when is_pid(Worker) ->
                   V -> V
               end,
     try
-        TStart = os:timestamp(),
-        Res = gen_server:call(Worker, {equery, Stmt, Params}, Timeout),
-        Time = timer:now_diff(os:timestamp(), TStart),
-        notify_db_event({db_query_time, Time}),
-        case Res of
-            {error, Error} -> notify_db_event({db_query_error, Stmt, Params, Error});
-            _ -> do_nothing
-        end,
-        %% TODO monitor query time
-        Res
+        gen_server:call(Worker, {equery, Stmt, Params}, Timeout)
     catch
         exit:{timeout, _} ->
             gen_server:call(Worker, cancel),
             error_logger:error_msg("query timeout ~p ~p", [Stmt, Params]),
-            notify_db_event({db_query_timeout, Stmt, Params}),
             {error, timeout}
     end;
 
@@ -124,11 +108,4 @@ get_worker(PoolName0) ->
             PoolStats = pooler:pool_stats(PoolName),
             error_logger:error_msg("Pool ~p overload: ~p", [PoolName, PoolStats]),
             {error, pool_overload}
-    end.
-
-
-notify_db_event(Event) ->
-    case epgsql_pool_settings:get_monitoring_callback() of
-        undefined -> do_nothing;
-        F when is_function(F) -> F(Event)
     end.
