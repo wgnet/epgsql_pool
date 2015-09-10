@@ -27,7 +27,8 @@ open_connection(PoolName, Connection0) ->
     end.
 
 
--spec close_connection(#epgsql_connection{}) -> #epgsql_connection{}.
+-spec close_connection(#epgsql_connection{} | undefined) -> #epgsql_connection{}.
+close_connection(undefined) -> undefined;
 close_connection(#epgsql_connection{sock = undefined} = Connection) -> Connection;
 close_connection(#epgsql_connection{sock = Sock} = Connection) ->
     epgsql:close(Sock),

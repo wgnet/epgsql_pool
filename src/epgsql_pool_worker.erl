@@ -2,7 +2,7 @@
 
 -behaviour(gen_server).
 
--export([start_link/1]).
+-export([start_link/1, stop/1]).
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2, terminate/2, code_change/3]).
 
 -include("epgsql_pool.hrl").
@@ -23,11 +23,15 @@ start_link(PoolName0) ->
     gen_server:start_link(?MODULE, PoolName, []).
 
 
+-spec stop(pid()) -> ok.
+stop(Pid) ->
+    gen_server:call(Pid, stop).
+
+
 %%% gen_server API
 
 -spec init(gs_args()) -> gs_init_reply().
 init(PoolName) ->
-    error_logger:info_msg("Init epgsql pool worker: ~p", [PoolName]),
     process_flag(trap_exit, true),
     random:seed(now()),
     self() ! open_connection,
@@ -37,6 +41,14 @@ init(PoolName) ->
 
 
 -spec handle_call(gs_request(), gs_from(), gs_reply()) -> gs_call_reply().
+handle_call(stop, _From, #state{connection = Connection,
+                                send_keep_alive_timer = Send_KA_Timer,
+                                no_reply_keep_alive_timer = NR_KA_Timer} = State) ->
+    Connection2 = epgsql_pool_utils:close_connection(Connection),
+    erlang:cancel_timer(Send_KA_Timer),
+    erlang:cancel_timer(NR_KA_Timer),
+    {stop, normal, ok, State#state{connection = Connection2}};
+
 handle_call(_, _From, #state{connection = undefined} = State) ->
     {reply, {error, no_connection}, State};
 

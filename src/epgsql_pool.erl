@@ -21,7 +21,9 @@ start(PoolName0, InitCount, MaxCount) ->
         {ok, _} -> PoolConfig = [{name, PoolName},
                                  {init_count, InitCount},
                                  {max_count, MaxCount},
-                                 {start_mfa, {epgsql_pool_worker, start_link, [PoolName]}}],
+                                 {start_mfa, {epgsql_pool_worker, start_link, [PoolName]}},
+                                 {stop_mfa, {epgsql_pool_worker, stop, []}}
+                                ],
                    pooler:new_pool(PoolConfig);
         {error, not_found} -> {error, connection_params_not_found}
     end.
