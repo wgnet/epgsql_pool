@@ -1,5 +1,10 @@
-compile:
+build-all:
+	rebar get-deps
 	rebar compile
+
+
+compile:
+	rebar compile skip_deps=true
 
 
 run:
@@ -10,6 +15,10 @@ tests:
 	rebar compile skip_deps=true
 	rebar eunit skip_deps=true
 	rebar ct skip_deps=true
+
+
+clean:
+	rebar clean
 
 
 ct-clean:
