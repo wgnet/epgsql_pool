@@ -17,13 +17,14 @@
 -spec start(pool_name(), integer(), integer()) -> {ok, pid()} | {error, term()}.
 start(PoolName0, InitCount, MaxCount) ->
     PoolName = epgsql_pool_utils:pool_name_to_atom(PoolName0),
-    PoolConfig = [
-                  {name, PoolName},
-                  {init_count, InitCount},
-                  {max_count, MaxCount},
-                  {start_mfa, {epgsql_pool_worker, start_link, [PoolName]}}
-                 ],
-    pooler:new_pool(PoolConfig).
+    case epgsql_pool_settings:get_connection_params(PoolName) of
+        {ok, _} -> PoolConfig = [{name, PoolName},
+                                 {init_count, InitCount},
+                                 {max_count, MaxCount},
+                                 {start_mfa, {epgsql_pool_worker, start_link, [PoolName]}}],
+                   pooler:new_pool(PoolConfig);
+        {error, not_found} -> {error, connection_params_not_found}
+    end.
 
 
 -spec stop(pool_name()) -> ok | {error, term()}.

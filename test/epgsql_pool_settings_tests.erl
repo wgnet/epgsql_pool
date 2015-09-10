@@ -30,8 +30,7 @@ get_set_test() ->
 connection_params_test() ->
     epgsql_pool_settings:start_link(),
 
-    ?assertThrow({connection_params_not_found, some_pool},
-                 epgsql_pool_settings:get_connection_params(some_pool)),
+    ?assertEqual({error, not_found}, epgsql_pool_settings:get_connection_params(some_pool)),
 
     Params1 = #epgsql_connection_params{host = "localhost", port = 5432,
                                         username="user", password="123",
@@ -43,8 +42,8 @@ connection_params_test() ->
                                         database="somedb"},
     epgsql_pool_settings:set_connection_params(pool_2, Params2),
 
-    ?assertEqual(Params1, epgsql_pool_settings:get_connection_params(pool_1)),
-    ?assertEqual(Params2, epgsql_pool_settings:get_connection_params(pool_2)),
+    ?assertEqual({ok, Params1}, epgsql_pool_settings:get_connection_params(pool_1)),
+    ?assertEqual({ok, Params2}, epgsql_pool_settings:get_connection_params(pool_2)),
 
     epgsql_pool_settings ! stop,
     ok.

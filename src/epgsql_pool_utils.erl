@@ -13,7 +13,7 @@
 open_connection(PoolName, undefined) ->
     open_connection(PoolName, #epgsql_connection{});
 open_connection(PoolName, Connection0) ->
-    Params = epgsql_pool_settings:get_connection_params(PoolName),
+    {ok,Params} = epgsql_pool_settings:get_connection_params(PoolName),
     #epgsql_connection_params{host = Host, port = Port, username = Username,
                               password = Password, database = Database} = Params,
     ConnectionTimeout = epgsql_pool_settings:get(connection_timeout),

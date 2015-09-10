@@ -18,12 +18,12 @@ start_link() ->
     gen_server:start_link({local, ?MODULE}, ?MODULE, [], []).
 
 
--spec get_connection_params(epgsql_pool:pool_name()) -> #epgsql_connection_params{}.
+-spec get_connection_params(epgsql_pool:pool_name()) -> {ok, #epgsql_connection_params{}} | {error, not_found}.
 get_connection_params(PoolName) ->
     Key = {connection, epgsql_pool_utils:pool_name_to_atom(PoolName)},
     case ets:lookup(?MODULE, Key) of
-        [] -> throw({connection_params_not_found, PoolName});
-        [{{connection, PoolName}, ConnectionParams}] -> ConnectionParams
+        [] -> {error, not_found};
+        [{{connection, PoolName}, ConnectionParams}] -> {ok, ConnectionParams}
     end.
 
 
