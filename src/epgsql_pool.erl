@@ -15,7 +15,7 @@
 
 %% Module API
 
--spec start(pool_name(), integer(), integer(), map() | #epgsql_connection_params{}) -> {ok, pid()} | {error, term()}.
+-spec start(pool_name(), integer(), integer(), map() | #epgsql_connection_params{}) -> {ok, pid()}.
 start(PoolName, InitCount, MaxCount, ConnectionParams) when is_map(ConnectionParams) ->
     Params2 = #epgsql_connection_params{
                  host = maps:get(host, ConnectionParams),
@@ -30,17 +30,15 @@ start(PoolName0, InitCount, MaxCount, #epgsql_connection_params{} = ConnectionPa
     PoolName = epgsql_pool_utils:pool_name_to_atom(PoolName0),
     epgsql_pool_settings:set_connection_params(PoolName, ConnectionParams),
     MaxQueue = epgsql_pool_settings:get(pooler_max_queue),
-    case epgsql_pool_settings:get_connection_params(PoolName) of
-        {ok, _} -> PoolConfig = [{name, PoolName},
-                                 {init_count, InitCount},
-                                 {max_count, MaxCount},
-                                 {queue_max, MaxQueue},
-                                 {start_mfa, {epgsql_pool_worker, start_link, [PoolName]}},
-                                 {stop_mfa, {epgsql_pool_worker, stop, []}}
-                                ],
-                   pooler:new_pool(PoolConfig);
-        {error, not_found} -> {error, connection_params_not_found}
-    end.
+    {ok, _} = epgsql_pool_settings:get_connection_params(PoolName),
+    PoolConfig = [{name, PoolName},
+                  {init_count, InitCount},
+                  {max_count, MaxCount},
+                  {queue_max, MaxQueue},
+                  {start_mfa, {epgsql_pool_worker, start_link, [PoolName]}},
+                  {stop_mfa, {epgsql_pool_worker, stop, []}}
+                 ],
+    pooler:new_pool(PoolConfig).
 
 
 -spec stop(pool_name()) -> ok | {error, term()}.
@@ -82,8 +80,8 @@ query(Worker, Stmt, Params, Options) when is_pid(Worker) ->
         gen_server:call(Worker, {equery, Stmt, Params}, Timeout)
     catch
         exit:{timeout, _} ->
-            gen_server:call(Worker, cancel),
             error_logger:error_msg("query timeout ~p ~p", [Stmt, Params]),
+            gen_server:call(Worker, cancel, infinity),
             {error, timeout}
     end;
 
