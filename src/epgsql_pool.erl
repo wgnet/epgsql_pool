@@ -1,6 +1,6 @@
 -module(epgsql_pool).
 
--export([start/3, stop/1,
+-export([start/4, stop/1,
          validate_connection_params/1,
          query/2, query/3, query/4,
          transaction/2
@@ -14,8 +14,19 @@
 
 %% Module API
 
--spec start(pool_name(), integer(), integer()) -> {ok, pid()} | {error, term()}.
-start(PoolName0, InitCount, MaxCount) ->
+-spec start(pool_name(), integer(), integer(), map() | #epgsql_connection_params{}) -> {ok, pid()} | {error, term()}.
+start(PoolName, InitCount, MaxCount, ConnectionParams) when is_map(ConnectionParams) ->
+    Params2 = #epgsql_connection_params{
+                 host = maps:get(host, ConnectionParams),
+                 port = maps:get(port, ConnectionParams),
+                 username = maps:get(username, ConnectionParams),
+                 password = maps:get(password, ConnectionParams),
+                 database = maps:get(database, ConnectionParams)
+                },
+    start(PoolName, InitCount, MaxCount, Params2);
+
+start(PoolName0, InitCount, MaxCount, #epgsql_connection_params{} = ConnectionParams) ->
+    epgsql_pool_settings:set_connection_params(my_pool, ConnectionParams),
     PoolName = epgsql_pool_utils:pool_name_to_atom(PoolName0),
     case epgsql_pool_settings:get_connection_params(PoolName) of
         {ok, _} -> PoolConfig = [{name, PoolName},
@@ -27,6 +38,8 @@ start(PoolName0, InitCount, MaxCount) ->
                    pooler:new_pool(PoolConfig);
         {error, not_found} -> {error, connection_params_not_found}
     end.
+
+
 
 
 -spec stop(pool_name()) -> ok | {error, term()}.

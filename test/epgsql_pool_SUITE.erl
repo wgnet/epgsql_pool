@@ -39,8 +39,7 @@ end_per_suite(Config) ->
 
 init_per_testcase(_, Config) ->
     Params = #epgsql_connection_params{host = "localhost", port = 5432, username = "test", password = "test", database = "testdb"},
-    epgsql_pool_settings:set_connection_params(my_pool, Params),
-    {ok, _} = epgsql_pool:start(my_pool, 5, 10),
+    {ok, _} = epgsql_pool:start(my_pool, 5, 10, Params),
     epgsql_pool:query(my_pool, "TRUNCATE TABLE item"),
     epgsql_pool:query(my_pool, "TRUNCATE TABLE category CASCADE"),
     Config.
