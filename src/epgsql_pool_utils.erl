@@ -40,7 +40,7 @@ reconnect(#epgsql_connection{reconnect_attempt = Attempt} = Connection) ->
     MaxTimeout = epgsql_pool_settings:get(max_reconnect_timeout),
     MinTimeout = epgsql_pool_settings:get(min_reconnect_timeout),
     Timeout = exponential_backoff(Attempt, 10, MinTimeout, MaxTimeout),
-    error_logger:info_msg("epgsql_pool reconnect after ~p attempt ~p", [Timeout, Attempt]),
+    error_logger:warning_msg("epgsql_pool reconnect after ~p attempt ~p", [Timeout, Attempt]),
     erlang:send_after(Timeout, self(), open_connection),
     Connection#epgsql_connection{reconnect_attempt = Attempt + 1}.
 

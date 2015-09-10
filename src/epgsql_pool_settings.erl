@@ -4,7 +4,7 @@
 -export([start_link/0,
          get_connection_params/1,
          set_connection_params/2,
-         get/1, set/2]).
+         get/1, set/2, all_keys/0]).
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2, terminate/2, code_change/3]).
 
 -include("epgsql_pool.hrl").
@@ -44,6 +44,12 @@ get(Key) ->
 -spec set(atom(), integer()) -> ok.
 set(Key, Value) ->
     gen_server:call(?MODULE, {save, {settings, Key}, Value}).
+
+
+-spec all_keys() -> [atom()].
+all_keys() ->
+    [connection_timeout, query_timeout, pooler_get_worker_timeout,
+     max_reconnect_timeout, min_reconnect_timeout, keep_alive_timeout].
 
 
 %%% gen_server API

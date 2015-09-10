@@ -3,7 +3,8 @@
 -export([start/4, stop/1,
          validate_connection_params/1,
          query/2, query/3, query/4,
-         transaction/2
+         transaction/2,
+         get_settings/0, set_settings/1
         ]).
 
 -include("epgsql_pool.hrl").
@@ -38,8 +39,6 @@ start(PoolName0, InitCount, MaxCount, #epgsql_connection_params{} = ConnectionPa
                    pooler:new_pool(PoolConfig);
         {error, not_found} -> {error, connection_params_not_found}
     end.
-
-
 
 
 -spec stop(pool_name()) -> ok | {error, term()}.
@@ -112,6 +111,23 @@ transaction(PoolName, Fun) ->
         {error, Reason} -> {error, Reason}
     end.
 
+
+-spec get_settings() -> map().
+get_settings() ->
+    lists:foldl(fun(Key, Map) ->
+                        maps:put(Key, epgsql_pool_settings:get(Key), Map)
+                end, maps:new(), epgsql_pool_settings:all_keys()).
+
+
+-spec set_settings(map()) -> ok.
+set_settings(Map) ->
+    lists:foreach(fun(Key) ->
+                          case maps:find(Key, Map) of
+                              {ok, Value} -> epgsql_pool_settings:set(Key, Value);
+                              error -> do_nothing
+                          end
+                  end, epgsql_pool_settings:all_keys()),
+    ok.
 
 %%% inner functions
 
