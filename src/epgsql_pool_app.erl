@@ -33,4 +33,7 @@ test_run() ->
 
     Res2 = epgsql_pool:query(my_pool, "select * from category where id = $1", [1], [{timeout, 200}]),
     error_logger:info_msg("~p", [Res2]),
+
+    Res3 = epgsql_pool:query(my_pool, "select pg_sleep(1);", [], [{timeout, 1000}]),
+    error_logger:info_msg("~p", [Res3]),
     ok.

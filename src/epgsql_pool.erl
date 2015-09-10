@@ -27,8 +27,8 @@ start(PoolName, InitCount, MaxCount, ConnectionParams) when is_map(ConnectionPar
     start(PoolName, InitCount, MaxCount, Params2);
 
 start(PoolName0, InitCount, MaxCount, #epgsql_connection_params{} = ConnectionParams) ->
-    epgsql_pool_settings:set_connection_params(my_pool, ConnectionParams),
     PoolName = epgsql_pool_utils:pool_name_to_atom(PoolName0),
+    epgsql_pool_settings:set_connection_params(PoolName, ConnectionParams),
     MaxQueue = epgsql_pool_settings:get(pooler_max_queue),
     case epgsql_pool_settings:get_connection_params(PoolName) of
         {ok, _} -> PoolConfig = [{name, PoolName},
