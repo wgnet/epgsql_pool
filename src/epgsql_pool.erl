@@ -85,15 +85,25 @@ query(Worker, Stmt, Params, Options) when is_pid(Worker) ->
             {error, timeout}
     end;
 
-query(PoolName, Stmt, Params, Options) ->
+query(PoolName0, Stmt, Params, Options) ->
+    PoolName = epgsql_pool_utils:pool_name_to_atom(PoolName0),
     case get_worker(PoolName) of
-        {ok, Worker} -> query(Worker, Stmt, Params, Options);
+        {ok, Worker} ->
+            try
+                query(Worker, Stmt, Params, Options)
+            catch
+                Err:Reason ->
+                    erlang:raise(Err, Reason, erlang:get_stacktrace())
+            after
+                pooler:return_member(PoolName, Worker, ok)
+            end;
         {error, Reason} -> {error, Reason}
     end.
 
 
 -spec transaction(pool_name(), fun()) -> epgsql:reply() | {error, term()}.
-transaction(PoolName, Fun) ->
+transaction(PoolName0, Fun) ->
+    PoolName = epgsql_pool_utils:pool_name_to_atom(PoolName0),
     case get_worker(PoolName) of
         {ok, Worker} ->
             try
@@ -131,8 +141,7 @@ set_settings(Map) ->
 
 %%% inner functions
 
-get_worker(PoolName0) ->
-    PoolName = epgsql_pool_utils:pool_name_to_atom(PoolName0),
+get_worker(PoolName) ->
     Timeout = epgsql_pool_settings:get(pooler_get_worker_timeout),
     case pooler:take_member(PoolName, Timeout) of
         Worker when is_pid(Worker) -> {ok, Worker};
