@@ -48,7 +48,8 @@ set(Key, Value) ->
 
 -spec all_keys() -> [atom()].
 all_keys() ->
-    [connection_timeout, query_timeout, pooler_get_worker_timeout,
+    [connection_timeout, query_timeout,
+     pooler_get_worker_timeout, pooler_max_queue,
      max_reconnect_timeout, min_reconnect_timeout, keep_alive_timeout].
 
 
@@ -60,6 +61,7 @@ init([]) ->
     ets:insert(T, {{settings, connection_timeout}, 10000}),
     ets:insert(T, {{settings, query_timeout}, 10000}),
     ets:insert(T, {{settings, pooler_get_worker_timeout}, 10000}),
+    ets:insert(T, {{settings, pooler_max_queue}, 100}),
     ets:insert(T, {{settings, max_reconnect_timeout}, 5000}),
     ets:insert(T, {{settings, min_reconnect_timeout}, 100}),
     ets:insert(T, {{settings, keep_alive_timeout}, 60000}),
