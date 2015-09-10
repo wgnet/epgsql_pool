@@ -56,6 +56,10 @@ handle_call(_, _From, #state{connection = undefined} = State) ->
 handle_call(_, _From, #state{connection = #epgsql_connection{sock = undefined}} = State) ->
     {reply, {error, reconnecting}, State};
 
+handle_call(get_sock, _From,
+            #state{connection = #epgsql_connection{sock = Sock}} = State) ->
+    {reply, Sock, State};
+
 handle_call({equery, Stmt, Params}, _From,
             #state{connection = #epgsql_connection{sock = Sock}} = State) ->
     Reply = case process_info(Sock, status) of

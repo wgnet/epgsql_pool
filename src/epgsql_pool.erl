@@ -76,12 +76,13 @@ query(Worker, Stmt, Params, Options) when is_pid(Worker) ->
                   undefined -> epgsql_pool_settings:get(query_timeout);
                   V -> V
               end,
+    Sock = gen_server:call(Worker, get_sock),
     try
         gen_server:call(Worker, {equery, Stmt, Params}, Timeout)
     catch
         exit:{timeout, _} ->
             error_logger:error_msg("query timeout ~p ~p", [Stmt, Params]),
-            gen_server:call(Worker, cancel, infinity),
+            epgsql_sock:cancel(Sock),
             {error, timeout}
     end;
 
