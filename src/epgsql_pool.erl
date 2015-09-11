@@ -46,7 +46,17 @@ stop(PoolName) ->
     pooler:rm_pool(epgsql_pool_utils:pool_name_to_atom(PoolName)).
 
 
--spec validate_connection_params(#epgsql_connection_params{}) -> ok | {error, term()}.
+-spec validate_connection_params(map() | #epgsql_connection_params{}) -> ok | {error, term()}.
+validate_connection_params(ConnectionParams) when is_map(ConnectionParams) ->
+    Params2 = #epgsql_connection_params{
+                 host = maps:get(host, ConnectionParams),
+                 port = maps:get(port, ConnectionParams),
+                 username = maps:get(username, ConnectionParams),
+                 password = maps:get(password, ConnectionParams),
+                 database = maps:get(database, ConnectionParams)
+                },
+    validate_connection_params(Params2);
+
 validate_connection_params(#epgsql_connection_params{host = Host, port = Port, username = Username,
                                                      password = Password, database = Database}) ->
     ConnectionTimeout = epgsql_pool_settings:get(connection_timeout),
