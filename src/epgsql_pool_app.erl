@@ -31,15 +31,4 @@ test_run() ->
     Res1 = epgsql_pool:query(my_pool, "select * from category"),
     error_logger:info_msg("Res1: ~p", [Res1]),
 
-    Res2 = epgsql_pool:query(my_pool, "select * from category where id = $1", [1], [{timeout, 200}]),
-    error_logger:info_msg("Res2: ~p", [Res2]),
-
-    Res3 = epgsql_pool:query(my_pool, "select pg_sleep(100) as A", [], [{timeout, 5000}]),
-    error_logger:info_msg("Res3: ~p", [Res3]),
-
-    Res4 = epgsql_pool:query(my_pool, "select pg_sleep(100) as B", [], [{timeout, 5000}]),
-    error_logger:info_msg("Res4: ~p", [Res4]),
-
-    Res5 = epgsql_pool:query(my_pool, "select 1 as C"),
-    error_logger:info_msg("Res5: ~p", [Res5]),
     ok.

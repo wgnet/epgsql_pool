@@ -131,7 +131,7 @@ transaction_test(Config) ->
 
 
 reconnect_test(Config) ->
-    Worker = pooler:take_member(my_pool, 1000) ,
+    Worker = pooler:take_member(my_pool, 1000),
     [state, my_pool, #epgsql_connection{sock = Sock1} | _]= tuple_to_list(sys:get_state(Worker)),
     ct:pal("Worker: ~p, sock: ~p", [Worker, Sock1]),
 
@@ -173,6 +173,18 @@ timeout_test(_Config) ->
     Res2 = epgsql_pool:query(my_pool, "SELECT pg_sleep(1)", [], [{timeout, 500}]),
     ct:pal("Res2:~p", [Res2]),
     ?assertEqual({error, timeout}, Res2),
+
+    Worker = pooler:take_member(my_pool, 1000),
+
+    Res3 = epgsql_pool:query(Worker, "SELECT pg_sleep(100)", [], [{timeout, 500}]),
+    ct:pal("Res3:~p", [Res3]),
+    ?assertEqual({error, timeout}, Res3),
+
+    %% check worker and connection able to perform query
+    Res4 = epgsql_pool:query(Worker, "SELECT * FROM item", [], [{timeout, 500}]),
+    ct:pal("Res4:~p", [Res4]),
+    ?assertMatch({ok, _, _}, Res4),
+
     ok.
 
 

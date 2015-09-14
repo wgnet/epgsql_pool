@@ -115,9 +115,9 @@ handle_info(keep_alive, #state{connection = #epgsql_connection{sock = Sock},
     %% send async keep-alive query to DB
     KA_Ref = epgsqli:squery(Sock, <<"SELECT 1">>),
 
-    KeepAliveTimeout = epgsql_pool_settings:get(keep_alive_timeout),
+    QueryTimeout = epgsql_pool_settings:get(query_timeout),
     erlang:cancel_timer(NR_KA_Timer),
-    NR_KA_Timer2 = erlang:send_after(KeepAliveTimeout * 2, self(), no_reply_to_keep_alive),
+    NR_KA_Timer2 = erlang:send_after(QueryTimeout, self(), no_reply_to_keep_alive),
     {noreply, State#state{keep_alive_query_ref = KA_Ref, no_reply_keep_alive_timer = NR_KA_Timer2}};
 
 handle_info({_Pid, Ref, done}, #state{keep_alive_query_ref = Ref,
