@@ -15,7 +15,8 @@
                 no_reply_keep_alive_timer :: reference() % timer to wait for reply from DB
                }).
 
-%% Module API
+
+ %% Module API
 
 -spec start_link(epgsql_pool:pool_name()) -> gs_start_link_reply().
 start_link(PoolName0) ->
