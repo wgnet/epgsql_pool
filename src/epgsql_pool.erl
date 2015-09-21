@@ -28,8 +28,9 @@ start(PoolName, InitCount, MaxCount, ConnectionParams) when is_map(ConnectionPar
 
 start(PoolName0, InitCount, MaxCount, #epgsql_connection_params{} = ConnectionParams) ->
     PoolName = epgsql_pool_utils:pool_name_to_atom(PoolName0),
-    epgsql_pool_settings:set_connection_params(PoolName, ConnectionParams),
-    MaxQueue = epgsql_pool_settings:get(pooler_max_queue),
+    %% TODO check PoolName not in all_keys()
+    application:set_env(epgsql_pool, PoolName, ConnectionParams),
+    {ok, MaxQueue} = application:get_env(epgsql_pool, pooler_max_queue),
     PoolConfig = [{name, PoolName},
                   {init_count, InitCount},
                   {max_count, MaxCount},
@@ -58,7 +59,7 @@ validate_connection_params(ConnectionParams) when is_map(ConnectionParams) ->
 
 validate_connection_params(#epgsql_connection_params{host = Host, port = Port, username = Username,
                                                      password = Password, database = Database}) ->
-    ConnectionTimeout = epgsql_pool_settings:get(connection_timeout),
+    {ok,ConnectionTimeout} = application:get_env(epgsql_pool, connection_timeout),
     Res = epgsql:connect(Host, Username, Password,
                          [{port, Port},
                           {database, Database},
@@ -82,7 +83,7 @@ query(PoolNameOrWorker, Stmt, Params) ->
 -spec query(pool_name() | pid(), epgsql:sql_query(), [epgsql:bind_param()], [proplists:option()]) -> epgsql:reply().
 query(Worker, Stmt, Params, Options) when is_pid(Worker) ->
     Timeout = case proplists:get_value(timeout, Options) of
-                  undefined -> epgsql_pool_settings:get(query_timeout);
+                  undefined -> element(2, application:get_env(epgsql_pool, query_timeout));
                   V -> V
               end,
     Sock = gen_server:call(Worker, get_sock),
@@ -135,24 +136,26 @@ transaction(PoolName0, Fun) ->
 -spec get_settings() -> map().
 get_settings() ->
     lists:foldl(fun(Key, Map) ->
-                        maps:put(Key, epgsql_pool_settings:get(Key), Map)
-                end, maps:new(), epgsql_pool_settings:all_keys()).
+                        maps:put(Key, element(2, application:get_env(epgsql_pool, Key)), Map)
+                end, maps:new(), all_keys()).
 
 
 -spec set_settings(map()) -> ok.
 set_settings(Map) ->
     lists:foreach(fun(Key) ->
                           case maps:find(Key, Map) of
-                              {ok, Value} -> epgsql_pool_settings:set(Key, Value);
+                              {ok, Value} -> application:set_env(epgsql_pool, Key, Value);
                               error -> do_nothing
                           end
-                  end, epgsql_pool_settings:all_keys()),
+                  end, all_keys()),
     ok.
+
 
 %%% inner functions
 
+-spec get_worker(pool_name()) -> {ok, pid()} | {error, term()}.
 get_worker(PoolName) ->
-    Timeout = epgsql_pool_settings:get(pooler_get_worker_timeout),
+    {ok, Timeout} = application:get_env(epgsql_pool, pooler_get_worker_timeout),
     case pooler:take_member(PoolName, Timeout) of
         Worker when is_pid(Worker) -> {ok, Worker};
         error_no_members ->
@@ -160,3 +163,10 @@ get_worker(PoolName) ->
             error_logger:error_msg("Pool ~p overload: ~p", [PoolName, PoolStats]),
             {error, pool_overload}
     end.
+
+
+-spec all_keys() -> [atom()].
+all_keys() ->
+    [connection_timeout, query_timeout,
+     pooler_get_worker_timeout, pooler_max_queue,
+     max_reconnect_timeout, min_reconnect_timeout, keep_alive_timeout].

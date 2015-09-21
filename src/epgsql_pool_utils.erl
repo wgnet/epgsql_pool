@@ -9,14 +9,15 @@
 -include("epgsql_pool.hrl").
 
 
--spec open_connection(atom(), #epgsql_connection{} | undefined) -> {ok, #epgsql_connection{}} | {error, term(), #epgsql_connection{}}.
+-spec open_connection(atom(), #epgsql_connection{} | undefined) ->
+                             {ok, #epgsql_connection{}} | {error, term(), #epgsql_connection{}}.
 open_connection(PoolName, undefined) ->
     open_connection(PoolName, #epgsql_connection{});
 open_connection(PoolName, Connection0) ->
-    {ok,Params} = epgsql_pool_settings:get_connection_params(PoolName),
+    {ok, Params} = application:get_env(epgsql_pool, PoolName),
     #epgsql_connection_params{host = Host, port = Port, username = Username,
                               password = Password, database = Database} = Params,
-    ConnectionTimeout = epgsql_pool_settings:get(connection_timeout),
+    {ok, ConnectionTimeout} = application:get_env(epgsql_pool, connection_timeout),
     Res = epgsql:connect(Host, Username, Password,
                          [{port, Port},
                           {database, Database},
@@ -37,8 +38,8 @@ close_connection(#epgsql_connection{sock = Sock} = Connection) ->
 
 -spec reconnect(#epgsql_connection{}) -> #epgsql_connection{}.
 reconnect(#epgsql_connection{reconnect_attempt = Attempt} = Connection) ->
-    MaxTimeout = epgsql_pool_settings:get(max_reconnect_timeout),
-    MinTimeout = epgsql_pool_settings:get(min_reconnect_timeout),
+    {ok, MaxTimeout} = application:get_env(epgsql_pool, max_reconnect_timeout),
+    {ok, MinTimeout} = application:get_env(epgsql_pool, min_reconnect_timeout),
     Timeout = exponential_backoff(Attempt, 10, MinTimeout, MaxTimeout),
     error_logger:warning_msg("epgsql_pool reconnect after ~p attempt ~p", [Timeout, Attempt]),
     erlang:send_after(Timeout, self(), open_connection),

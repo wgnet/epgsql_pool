@@ -1,13 +1,19 @@
 %%-*- mode: erlang -*-
 
-{application, epgsql_pool, [
-    {description, "Connection pool for PostgreSQL"},
-    {vsn, "1.0.0"},
-    {registered, []},
-    {applications, [
-        epgsql,
-        pooler
-    ]},
-    {mod, {epgsql_pool_app, []}},
-    {env, []}
-]}.
+{application, epgsql_pool,
+ [
+  {description, "Connection pool for PostgreSQL"},
+  {vsn, "1.0.0"},
+  {registered, []},
+  {applications, [epgsql, pooler]},
+  {mod, {epgsql_pool_app, []}},
+  {env, [
+         {connection_timeout, 10000},
+         {query_timeout, 10000},
+         {pooler_get_worker_timeout, 10000},
+         {pooler_max_queue, 100},
+         {max_reconnect_timeout, 5000},
+         {min_reconnect_timeout, 100},
+         {keep_alive_timeout, 60000}
+        ]}
+ ]}.

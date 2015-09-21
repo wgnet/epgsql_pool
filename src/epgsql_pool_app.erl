@@ -9,7 +9,7 @@
 
 -spec start(term(), term()) -> {ok, pid()}.
 start(_StartType, _StartArgs) ->
-    epgsql_pool_sup:start_link().
+    {ok, self()}.
 
 
 -spec stop(term()) -> ok.

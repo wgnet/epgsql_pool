@@ -5,7 +5,7 @@
 
 
 get_set_settings_test() ->
-    epgsql_pool_settings:start_link(),
+     application:ensure_all_started(epgsql_pool),
 
     ?assertEqual(#{connection_timeout => 10000,
                    keep_alive_timeout => 60000,
@@ -33,5 +33,4 @@ get_set_settings_test() ->
                    query_timeout => 555},
                  epgsql_pool:get_settings()),
 
-    epgsql_pool_settings ! stop,
     ok.

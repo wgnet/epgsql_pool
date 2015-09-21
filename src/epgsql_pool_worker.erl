@@ -97,7 +97,7 @@ handle_info(open_connection, #state{pool_name = PoolName, connection = Connectio
                                     send_keep_alive_timer = Send_KA_Timer} = State) ->
     case epgsql_pool_utils:open_connection(PoolName, Connection) of
         {ok, Connection2} ->
-            KeepAliveTimeout = epgsql_pool_settings:get(keep_alive_timeout),
+            {ok, KeepAliveTimeout} = application:get_env(epgsql_pool, keep_alive_timeout),
             erlang:cancel_timer(Send_KA_Timer),
             Send_KA_Timer2 = erlang:send_after(KeepAliveTimeout, self(), keep_alive),
             {noreply, State#state{connection = Connection2, send_keep_alive_timer = Send_KA_Timer2}};
@@ -116,7 +116,7 @@ handle_info(keep_alive, #state{connection = #epgsql_connection{sock = Sock},
     %% send async keep-alive query to DB
     KA_Ref = epgsqli:squery(Sock, <<"SELECT 1">>),
 
-    QueryTimeout = epgsql_pool_settings:get(query_timeout),
+    {ok, QueryTimeout} = application:get_env(epgsql_pool, query_timeout),
     erlang:cancel_timer(NR_KA_Timer),
     NR_KA_Timer2 = erlang:send_after(QueryTimeout, self(), no_reply_to_keep_alive),
     {noreply, State#state{keep_alive_query_ref = KA_Ref, no_reply_keep_alive_timer = NR_KA_Timer2}};
@@ -125,7 +125,7 @@ handle_info({_Pid, Ref, done}, #state{keep_alive_query_ref = Ref,
                                       send_keep_alive_timer = Send_KA_Timer,
                                       no_reply_keep_alive_timer = NR_KA_Timer} = State) ->
     %% got reply to asycn keep-alive query from DB
-    KeepAliveTimeout = epgsql_pool_settings:get(keep_alive_timeout),
+    {ok, KeepAliveTimeout} = application:get_env(epgsql_pool, keep_alive_timeout),
     erlang:cancel_timer(Send_KA_Timer),
     erlang:cancel_timer(NR_KA_Timer),
     Send_KA_Timer2 = erlang:send_after(KeepAliveTimeout, self(), keep_alive),
