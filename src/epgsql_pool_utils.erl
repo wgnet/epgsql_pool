@@ -40,20 +40,10 @@ close_connection(#epgsql_connection{sock = Sock} = Connection) ->
 reconnect(#epgsql_connection{reconnect_attempt = Attempt} = Connection) ->
     {ok, MaxTimeout} = application:get_env(epgsql_pool, max_reconnect_timeout),
     {ok, MinTimeout} = application:get_env(epgsql_pool, min_reconnect_timeout),
-    Timeout = exponential_backoff(Attempt, 10, MinTimeout, MaxTimeout),
+    Timeout = herd_reconnect:exp_backoff(Attempt, MinTimeout, MaxTimeout),
     error_logger:warning_msg("epgsql_pool reconnect after ~p attempt ~p", [Timeout, Attempt]),
     erlang:send_after(Timeout, self(), open_connection),
     Connection#epgsql_connection{reconnect_attempt = Attempt + 1}.
-
-
--spec exponential_backoff(integer(), integer(), integer(), integer()) -> integer().
-exponential_backoff(Attempt, MaxAttempt, _BaseTimeout, MaxTimeout) when Attempt >= MaxAttempt ->
-    Half = MaxTimeout div 2,
-    Half + random:uniform(Half);
-exponential_backoff(Attempt, _MaxAttempt, BaseTimeout, MaxTimeout) ->
-    Timeout = min(erlang:round(math:pow(2, Attempt) * BaseTimeout), MaxTimeout),
-    Half = Timeout div 2,
-    Half + random:uniform(Half).
 
 
 -spec pool_name_to_atom(epgsql_pool:pool_name()) -> atom().

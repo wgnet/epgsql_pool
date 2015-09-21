@@ -34,8 +34,7 @@ stop(Pid) ->
 -spec init(gs_args()) -> gs_init_reply().
 init(PoolName) ->
     process_flag(trap_exit, true),
-    <<A:32, B:32, C:32>> = crypto:rand_bytes(12),
-    random:seed({A,B,C}),
+    herd_rand:init_crypto(),
     self() ! open_connection,
     {ok, #state{pool_name = PoolName,
                 send_keep_alive_timer = make_ref(), % no need to check for undefined in cancel_timer
