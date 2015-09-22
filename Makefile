@@ -8,7 +8,7 @@ compile:
 
 
 run:
-	erl -pa ebin -pa deps/*/ebin -boot start_sasl -s epgsql_pool_app test_run
+	erl -pa ebin -pa deps/*/ebin -boot start_sasl -s epgsql_pool test_run
 
 
 tests:

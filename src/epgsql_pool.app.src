@@ -6,7 +6,6 @@
   {vsn, "1.0.0"},
   {registered, []},
   {applications, [epgsql, pooler]},
-  {mod, {epgsql_pool_app, []}},
   {env, [
          {connection_timeout, 10000},
          {query_timeout, 10000},
