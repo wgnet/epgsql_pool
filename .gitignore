@@ -5,3 +5,5 @@ deps/
 .rebar
 logs
 erl_crash.dump
+_build
+rebar.lock
