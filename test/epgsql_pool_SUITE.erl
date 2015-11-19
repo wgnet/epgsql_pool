@@ -144,13 +144,13 @@ reconnect_test(Config) ->
 
     R2 = epgsql_pool:query(Worker, "select * from item"),
     ct:pal("second query goes immediatelly ~p", [R2]),
-    {error, reconnecting} = R2,
+    {error, no_connection} = R2,
 
     timer:sleep(50),
 
     R3 = epgsql_pool:query(Worker, "select * from item"),
     ct:pal("third query goes after 50 ms ~p", [R3]),
-    {error, reconnecting} = R3,
+    {error, no_connection} = R3,
 
     timer:sleep(150),
 

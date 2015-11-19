@@ -54,7 +54,7 @@ handle_call(_, _From, #state{connection = undefined} = State) ->
     {reply, {error, no_connection}, State};
 
 handle_call(_, _From, #state{connection = #epgsql_connection{sock = undefined}} = State) ->
-    {reply, {error, reconnecting}, State};
+    {reply, {error, no_connection}, State};
 
 handle_call(get_sock, _From,
             #state{connection = #epgsql_connection{sock = Sock}} = State) ->
@@ -63,7 +63,7 @@ handle_call(get_sock, _From,
 handle_call({equery, Stmt, Params}, _From,
             #state{connection = #epgsql_connection{sock = Sock}} = State) ->
     Reply = case process_info(Sock, status) of
-                undefined -> {error, reconnecting};
+                undefined -> {error, no_connection};
                 {status, _} -> epgsql:equery(Sock, Stmt, Params)
             end,
     {reply, Reply, State};
@@ -71,7 +71,7 @@ handle_call({equery, Stmt, Params}, _From,
 handle_call({squery, Stmt}, _From,
             #state{connection = #epgsql_connection{sock = Sock}} = State) ->
     Reply = case process_info(Sock, status) of
-                undefined -> {error, reconnecting};
+                undefined -> {error, no_connection};
                 {status, _} -> epgsql:squery(Sock, Stmt)
             end,
     {reply, Reply, State};

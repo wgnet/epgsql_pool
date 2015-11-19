@@ -12,7 +12,7 @@ get_set_settings_test() ->
                    max_reconnect_timeout => 5000,
                    min_reconnect_timeout => 100,
                    pooler_get_worker_timeout => 10000,
-                   pooler_max_queue => 100,
+                   pooler_max_queue => 1000,
                    query_timeout => 10000},
                  epgsql_pool:get_settings()),
 
