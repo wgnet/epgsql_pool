@@ -23,7 +23,7 @@ open_connection(PoolName, Connection0) ->
                           {database, Database},
                           {timeout, ConnectionTimeout}]),
     case Res of
-        {ok, Sock} -> {ok, Connection0#epgsql_connection{sock = Sock, params = Params}};
+        {ok, Sock} -> {ok, Connection0#epgsql_connection{sock = Sock, params = Params, reconnect_attempt = 0}};
         {error, Reason} -> {error, Reason, Connection0}
     end.
 
