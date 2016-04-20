@@ -151,11 +151,16 @@ handle_info({'EXIT', _Sock, normal},
     {noreply, State};
 
 handle_info({'EXIT', Sock, Reason},
-            #state{connection = #epgsql_connection{sock = Sock} = Connection} = State) ->
-    error_logger:error_msg("DB Connection ~p EXIT with reason: ~p", [Sock, Reason]),
+    #state{connection = #epgsql_connection{sock = Sock} = Connection} = State) ->
+    error_logger:error_msg("DB Connection ~p~nEXIT with reason:~p", [Connection, Reason]),
     Connection2 = epgsql_pool_utils:close_connection(Connection),
     Connection3 = epgsql_pool_utils:reconnect(Connection2),
     {noreply, State#state{connection = Connection3}};
+
+handle_info({'EXIT', _Sock, econnrefused},
+    #state{connection = #epgsql_connection{sock = undefined}} = State) ->
+    %% reconnect is already running, do nothing
+    {noreply, State};
 
 handle_info(Message, State) ->
     error_logger:error_msg("unknown info ~p in ~p ~n", [Message, ?MODULE]),
