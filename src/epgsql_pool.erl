@@ -3,6 +3,7 @@
 -export([start/4, stop/1,
          validate_connection_params/1,
          query/2, query/3, query/4,
+         squery/2, squery/3,
          transaction/2,
          get_settings/0, set_settings/1,
          test_run/0
@@ -85,27 +86,40 @@ query(PoolNameOrWorker, Stmt, Params) ->
 
 
 -spec query(pool_name() | pid(), epgsql:sql_query(), [epgsql:bind_param()], [proplists:option()]) -> epgsql:reply().
-query(Worker, Stmt, Params, Options) when is_pid(Worker) ->
+query(PoolNameOrWorker, Stmt, Params, Options) ->
+    do_query(PoolNameOrWorker, {equery, Stmt, Params}, Options).
+
+
+-spec squery(pool_name() | pid(), epgsql:sql_query()) -> epgsql:reply(epgsql:squery_row()) | {error, timeout}.
+squery(PoolNameOrWorker, Stmt) ->
+    squery(PoolNameOrWorker, Stmt, []).
+
+-spec squery(pool_name() | pid(), epgsql:sql_query(), [proplists:option()]) ->
+                    epgsql:reply(epgsql:squery_row()) | {error, timeout}.
+squery(PoolNameOrWorker, Stmt, Options) ->
+    do_query(PoolNameOrWorker, {squery, Stmt}, Options).
+
+
+do_query(Worker, QueryTuple, Options) when is_pid(Worker) ->
     Timeout = case proplists:get_value(timeout, Options) of
                   undefined -> element(2, application:get_env(epgsql_pool, query_timeout));
                   V -> V
               end,
     Sock = gen_server:call(Worker, get_sock),
     try
-        gen_server:call(Worker, {equery, Stmt, Params}, Timeout)
+        gen_server:call(Worker, QueryTuple, Timeout)
     catch
         exit:{timeout, _} ->
-            error_logger:error_msg("query timeout ~p ~p", [Stmt, Params]),
+            error_logger:error_msg("query timeout ~p", [QueryTuple]),
             epgsql_sock:cancel(Sock),
             {error, timeout}
     end;
-
-query(PoolName0, Stmt, Params, Options) ->
+do_query(PoolName0, QueryTuple, Options) ->
     PoolName = epgsql_pool_utils:pool_name_to_atom(PoolName0),
     case get_worker(PoolName) of
         {ok, Worker} ->
             try
-                query(Worker, Stmt, Params, Options)
+                do_query(Worker, QueryTuple, Options)
             catch
                 Err:Reason ->
                     erlang:raise(Err, Reason, erlang:get_stacktrace())
