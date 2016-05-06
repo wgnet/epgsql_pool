@@ -11,7 +11,7 @@
 
 -export([all/0,
          init_per_suite/1, end_per_suite/1, init_per_testcase/2, end_per_testcase/2,
-         query_test/1, transaction_test/1, reconnect_test/1, timeout_test/1,
+         query_test/1, squery_test/1, transaction_test/1, reconnect_test/1, timeout_test/1,
          validate_connection_params_test/1
         ]).
 
@@ -20,6 +20,7 @@
 
 all() ->
     [query_test,
+     squery_test,
      transaction_test,
      reconnect_test,
      timeout_test,
@@ -71,6 +72,23 @@ query_test(Config) ->
     ?assertMatch(#error{severity = error, message = <<"relation \"some_table\" does not exist">>}, Error),
     ok.
 
+squery_test(Config) ->
+    {ok, 3, _, Ids} = epgsql_pool:squery(my_pool,
+                                         "INSERT INTO category (title) "
+                                         "VALUES ('cat 1'), ('cat 2'), ('cat 3') "
+                                         "RETURNING id"),
+    WaitForRows = lists:map(fun({{Id}, Title}) -> {Id, Title} end,
+                            lists:zip(Ids, [<<"cat 1">>, <<"cat 2">>, <<"cat 3">>])),
+    {ok, _, Rows} = epgsql_pool:squery(my_pool, "SELECT id, title FROM category ORDER by id ASC"),
+    ct:pal("Rows ~p", [Rows]),
+    ?assertEqual(WaitForRows, Rows),
+
+    ?assertMatch([{ok, _, [{<<"1">>}]}, {ok, _, [{<<"2">>}]}],
+                 epgsql_pool:squery(my_pool, "SELECT 1; SELECT 2;")),
+
+    ?assertMatch({error, #error{severity = error, message = <<"relation \"some_table\" does not exist">>}},
+                 epgsql_pool:squery(my_pool, "SELECT * FROM some_table")),
+    Config.
 
 transaction_test(Config) ->
     {FirstCatId, CatIds2, ItemIds2} =
