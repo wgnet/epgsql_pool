@@ -203,8 +203,13 @@ validate_connection_params_test(_Config) ->
 
     Params3 = #epgsql_connection_params{host = "localhost", port = 5432,
                                         username = "test", password = "test", database = "some"},
-    Res3 = epgsql_pool:validate_connection_params(Params3),
+    {error, Res3} = epgsql_pool:validate_connection_params(Params3),
     ct:pal("Res3: ~p", [Res3]),
-    ?assertEqual({error,{error,fatal,<<"3D000">>,<<"database \"some\" does not exist">>, []}}, Res3),
+    ?assertMatch(#error{
+                    severity = fatal,
+                    code = <<"3D000">>,
+                    codename = invalid_catalog_name,
+                    message = <<"database \"some\" does not exist">>
+                   }, Res3),
 
     ok.
