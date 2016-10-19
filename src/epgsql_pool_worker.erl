@@ -113,7 +113,7 @@ handle_info(keep_alive, #state{connection = #epgsql_connection{sock = undefined}
 handle_info(keep_alive, #state{connection = #epgsql_connection{sock = Sock},
                                no_reply_keep_alive_timer = NR_KA_Timer} = State) ->
     %% send async keep-alive query to DB
-    KA_Ref = epgsqli:squery(Sock, <<"SELECT 1">>),
+    KA_Ref = epgsqli:squery(Sock, "SELECT 1"),
 
     {ok, QueryTimeout} = application:get_env(epgsql_pool, query_timeout),
     erlang:cancel_timer(NR_KA_Timer),

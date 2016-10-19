@@ -40,7 +40,7 @@ start(PoolName0, InitCount, MaxCount, #epgsql_connection_params{} = ConnectionPa
                           {max_count, MaxCount},
                           {queue_max, MaxQueue},
                           {start_mfa, {epgsql_pool_worker, start_link, [PoolName]}},
-                          {stop_mfa, {epgsql_pool_worker, stop, []}}
+                          {stop_mfa, {epgsql_pool_worker, stop, ['$pooler_pid']}}
                          ],
             pooler:new_pool(PoolConfig)
     end.
