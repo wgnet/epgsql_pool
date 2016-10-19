@@ -1,29 +1,22 @@
-build-all:
-	rebar get-deps
-	rebar compile
-
-
 compile:
-	rebar compile skip_deps=true
+	rebar3 compile
 
+eunit:
+	rebar3 eunit
 
-run:
-	erl -pa ebin -pa deps/*/ebin -boot start_sasl -s epgsql_pool test_run
+ct:
+	rebar3 ct
 
+tests: eunit ct
 
-tests:
-	rebar compile skip_deps=true
-	rebar eunit skip_deps=true
-	rebar ct skip_deps=true
-
-
-clean:
-	rebar clean
-
-
-ct-clean:
-	rm -rf logs/*
-
+console:
+	erl -pa _build/default/lib/*/ebin -s epgsql_pool test_run
 
 d:
-	dialyzer --src -I include src
+	rebar3 dialyzer
+
+clean:
+	rebar3 clean
+
+clean-all:
+	rm -rf _build
