@@ -116,39 +116,30 @@ do_query(Worker, QueryTuple, Options) when is_pid(Worker) ->
     end;
 do_query(PoolName0, QueryTuple, Options) ->
     PoolName = epgsql_pool_utils:pool_name_to_atom(PoolName0),
-    case get_worker(PoolName) of
-        {ok, Worker} ->
-            try
-                do_query(Worker, QueryTuple, Options)
-            catch
-                Err:Reason ->
-                    erlang:raise(Err, Reason, erlang:get_stacktrace())
-            after
-                pooler:return_member(PoolName, Worker, ok)
-            end;
-        {error, Reason} -> {error, Reason}
-    end.
+    with_worker(
+      PoolName,
+      fun(Worker) ->
+              do_query(Worker, QueryTuple, Options)
+      end).
 
 
 -spec transaction(pool_name(), fun()) -> epgsql:reply() | {error, term()}.
 transaction(PoolName0, Fun) ->
     PoolName = epgsql_pool_utils:pool_name_to_atom(PoolName0),
-    case get_worker(PoolName) of
-        {ok, Worker} ->
-            try
-                gen_server:call(Worker, {squery, "BEGIN"}),
-                Result = Fun(Worker),
-                gen_server:call(Worker, {squery, "COMMIT"}),
-                Result
-            catch
-                Err:Reason ->
-                    gen_server:call(Worker, {squery, "ROLLBACK"}),
-                    erlang:raise(Err, Reason, erlang:get_stacktrace())
-            after
-                pooler:return_member(PoolName, Worker, ok)
-            end;
-        {error, Reason} -> {error, Reason}
-    end.
+    with_worker(
+      PoolName,
+      fun(Worker) ->
+              try
+                  gen_server:call(Worker, {squery, "BEGIN"}),
+                  Result = Fun(Worker),
+                  gen_server:call(Worker, {squery, "COMMIT"}),
+                  Result
+              catch
+                  Err:Reason ->
+                      gen_server:call(Worker, {squery, "ROLLBACK"}),
+                      erlang:raise(Err, Reason, erlang:get_stacktrace())
+              end
+      end).
 
 
 -spec get_settings() -> map().
@@ -198,6 +189,24 @@ get_worker(PoolName) ->
             PoolStats = pooler:pool_stats(PoolName),
             error_logger:error_msg("Pool ~p overload: ~p", [PoolName, PoolStats]),
             {error, pool_overload}
+    end.
+
+
+with_worker(PoolName, Fun) ->
+    case get_worker(PoolName) of
+        {ok, Worker} ->
+            Response =
+                try
+                    Fun(Worker)
+                catch
+                    Err:Reason ->
+                        pooler:return_member(PoolName, Worker, fail),
+                        erlang:raise(Err, Reason, erlang:get_stacktrace())
+                end,
+            pooler:return_member(PoolName, Worker, ok),
+            Response;
+        Err ->
+            Err
     end.
 
 
