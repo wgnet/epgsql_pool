@@ -126,17 +126,18 @@ do_query(PoolName0, QueryTuple, Options) ->
 -spec transaction(pool_name(), fun()) -> epgsql:reply() | {error, term()}.
 transaction(PoolName0, Fun) ->
     PoolName = epgsql_pool_utils:pool_name_to_atom(PoolName0),
+    Timeout = application:get_env(epgsql_pool, transaction_query_timeout, 10000),
     with_worker(
       PoolName,
       fun(Worker) ->
               try
-                  gen_server:call(Worker, {squery, "BEGIN"}),
+                  gen_server:call(Worker, {squery, "BEGIN"}, Timeout),
                   Result = Fun(Worker),
-                  gen_server:call(Worker, {squery, "COMMIT"}),
+                  gen_server:call(Worker, {squery, "COMMIT"}, Timeout),
                   Result
               catch
                   Err:Reason ->
-                      gen_server:call(Worker, {squery, "ROLLBACK"}),
+                      gen_server:call(Worker, {squery, "ROLLBACK"}, Timeout),
                       erlang:raise(Err, Reason, erlang:get_stacktrace())
               end
       end).

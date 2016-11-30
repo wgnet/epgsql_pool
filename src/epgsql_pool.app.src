@@ -9,6 +9,7 @@
   {env, [
          {connection_timeout, 10000},
          {query_timeout, 10000},
+         {transaction_query_timeout, 20000},
          {pooler_get_worker_timeout, 10000},
          {pooler_max_queue, 1000},
          {max_reconnect_timeout, 5000},
