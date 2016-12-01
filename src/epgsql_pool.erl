@@ -126,7 +126,7 @@ do_query(PoolName0, QueryTuple, Options) ->
 -spec transaction(pool_name(), fun()) -> epgsql:reply() | {error, term()}.
 transaction(PoolName0, Fun) ->
     PoolName = epgsql_pool_utils:pool_name_to_atom(PoolName0),
-    Timeout = application:get_env(epgsql_pool, transaction_query_timeout, 10000),
+    Timeout = application:get_env(epgsql_pool, transaction_timeout, 20000),
     with_worker(
       PoolName,
       fun(Worker) ->
