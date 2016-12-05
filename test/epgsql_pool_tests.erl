@@ -13,8 +13,9 @@ get_set_settings_test() ->
                    min_reconnect_timeout => 100,
                    pooler_get_worker_timeout => 10000,
                    pooler_max_queue => 1000,
-                   query_timeout => 10000},
-                 epgsql_pool:get_settings()),
+                   query_timeout => 10000,
+                   transaction_timeout => 20000},
+        epgsql_pool:get_settings()),
 
     ok = epgsql_pool:set_settings(#{aa => bb,
                                     pooler_max_queue => 500,
@@ -30,7 +31,8 @@ get_set_settings_test() ->
                    min_reconnect_timeout => 42,
                    pooler_get_worker_timeout => 10000,
                    pooler_max_queue => 500,
-                   query_timeout => 555},
+                   query_timeout => 555,
+                   transaction_timeout => 20000},
                  epgsql_pool:get_settings()),
 
     ok.

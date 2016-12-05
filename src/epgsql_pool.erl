@@ -105,15 +105,22 @@ do_query(Worker, QueryTuple, Options) when is_pid(Worker) ->
                   undefined -> element(2, application:get_env(epgsql_pool, query_timeout));
                   V -> V
               end,
-    Sock = gen_server:call(Worker, get_sock),
     try
-        gen_server:call(Worker, QueryTuple, Timeout)
+        Sock = gen_server:call(Worker, get_sock),
+        try
+            gen_server:call(Worker, QueryTuple, Timeout)
+        catch
+            exit:{timeout, _} ->
+                error_logger:error_msg("query timeout ~p", [QueryTuple]),
+                epgsql_sock:cancel(Sock),
+                {error, timeout}
+        end
     catch
         exit:{timeout, _} ->
-            error_logger:error_msg("query timeout ~p", [QueryTuple]),
-            epgsql_sock:cancel(Sock),
+            error_logger:error_msg("get_sock timeout ~p", [QueryTuple]),
             {error, timeout}
     end;
+
 do_query(PoolName0, QueryTuple, Options) ->
     PoolName = epgsql_pool_utils:pool_name_to_atom(PoolName0),
     with_worker(
