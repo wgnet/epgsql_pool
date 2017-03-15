@@ -9,8 +9,8 @@
 -include("otp_types.hrl").
 
 -record(state, {pool_name :: atom(),
-                connection :: #epgsql_connection{},
-                keep_alive_query_ref :: reference(), % ref to async keep-alive query to DB
+                connection :: #epgsql_connection{} | undefined,
+                keep_alive_query_ref :: reference() | undefined, % ref to async keep-alive query to DB
                 send_keep_alive_timer :: reference(), % timer to send keep-alive query to DB
                 no_reply_keep_alive_timer :: reference() % timer to wait for reply from DB
                }).

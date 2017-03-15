@@ -8,7 +8,7 @@
          }).
 
 -record(epgsql_connection, {
-          sock :: pid(),
-          params :: #epgsql_connection_params{},
+          sock :: pid() | undefined,
+          params :: #epgsql_connection_params{} | undefined,
           reconnect_attempt = 0 :: non_neg_integer()
          }).

@@ -3,7 +3,7 @@
 {application, epgsql_pool,
  [
   {description, "Connection pool for PostgreSQL"},
-  {vsn, "1.0.0"},
+  {vsn, "1.3.0"},
   {registered, []},
   {applications, [epgsql, pooler]},
   {env, [
