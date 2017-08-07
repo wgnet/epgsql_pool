@@ -1,6 +1,6 @@
 -module(epgsql_test).
 
--export([test_run/0, on_connect/1, on_disconnect/1]).
+-export([test_run/0, on_connect/2, on_disconnect/1]).
 
 -spec test_run() -> ok.
 test_run() ->
@@ -16,8 +16,10 @@ test_run() ->
     {ok, _} = epgsql_pool:start(my_pool, 2, 2, Params),
 
     Qs = [
-        "create table category (id int, name varchar)",
-        "insert into category values (1, 'some')",
+        "CREATE TABLE category (id bigserial, title text, PRIMARY KEY (id))",
+        "CREATE TABLE item (id bigserial, category_id bigint, title text, num int, PRIMARY KEY (id), "
+        "FOREIGN KEY (category_id) REFERENCES category (id) ON DELETE SET NULL)",
+        "insert into category (title) values ('some'), ('other')",
         "select * from category"
     ],
 
@@ -30,9 +32,9 @@ test_run() ->
     ok.
 
 
--spec on_connect(term()) -> ok.
-on_connect(PoolName) ->
-    error_logger:info_msg("On Connect ~p", [PoolName]),
+-spec on_connect(term(), pid()) -> ok.
+on_connect(PoolName, Sock) ->
+    error_logger:info_msg("On Connect ~p ~p", [PoolName, Sock]),
     ok.
 
 
