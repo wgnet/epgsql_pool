@@ -10,7 +10,7 @@ ct:
 tests: eunit ct
 
 console:
-	erl -pa _build/default/lib/*/ebin -s epgsql_pool test_run
+	erl -pa _build/default/lib/*/ebin -s epgsql_test test_run
 
 d:
 	rebar3 dialyzer

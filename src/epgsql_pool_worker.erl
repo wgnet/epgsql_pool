@@ -99,12 +99,29 @@ handle_info(open_connection, #state{pool_name = PoolName, connection = Connectio
             {ok, KeepAliveTimeout} = application:get_env(epgsql_pool, keep_alive_timeout),
             erlang:cancel_timer(Send_KA_Timer),
             Send_KA_Timer2 = erlang:send_after(KeepAliveTimeout, self(), keep_alive),
+            self() ! on_connect,
             {noreply, State#state{connection = Connection2, send_keep_alive_timer = Send_KA_Timer2}};
         {error, Reason, Connection3} ->
             error_logger:error_msg("Pool:~p, Worker:~p could not to connect to DB:~p", [PoolName, self(), Reason]),
             Connection4 = epgsql_pool_utils:reconnect(Connection3),
             {noreply, State#state{connection = Connection4}}
     end;
+
+handle_info(on_connect, #state{pool_name = PoolName} = State) ->
+    case application:get_env(epgsql_pool, on_connect_callback) of
+        undefined -> ignore;
+        {ok, undefined} -> ignore;
+        {ok, {M, F}} -> M:F(PoolName)
+    end,
+    {noreply, State};
+
+handle_info(on_disconnect, #state{pool_name = PoolName} = State) ->
+    case application:get_env(epgsql_pool, on_disconnect_callback) of
+        undefined -> ignore;
+        {ok, undefined} -> ignore;
+        {ok, {M, F}} -> M:F(PoolName)
+    end,
+    {noreply, State};
 
 handle_info(keep_alive, #state{connection = #epgsql_connection{sock = undefined}} = State) ->
     do_nothing,
@@ -143,6 +160,7 @@ handle_info(no_reply_to_keep_alive, #state{connection = Connection,
     erlang:cancel_timer(NR_KA_Timer),
     Connection2 = epgsql_pool_utils:close_connection(Connection),
     Connection3 = epgsql_pool_utils:reconnect(Connection2),
+    self() ! on_disconnect,
     {noreply, State#state{connection = Connection3}};
 
 handle_info({'EXIT', _Sock, normal},
@@ -155,6 +173,7 @@ handle_info({'EXIT', Sock, Reason},
     error_logger:error_msg("DB Connection ~p~nEXIT with reason:~p", [Connection, Reason]),
     Connection2 = epgsql_pool_utils:close_connection(Connection),
     Connection3 = epgsql_pool_utils:reconnect(Connection2),
+    self() ! on_disconnect,
     {noreply, State#state{connection = Connection3}};
 
 handle_info({'EXIT', _Sock, econnrefused},

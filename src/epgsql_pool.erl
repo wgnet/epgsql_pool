@@ -5,8 +5,7 @@
          query/2, query/3, query/4,
          squery/2, squery/3,
          transaction/2,
-         get_settings/0, set_settings/1,
-         test_run/0
+         get_settings/0, set_settings/1
         ]).
 
 -include("epgsql_pool.hrl").
@@ -165,24 +164,6 @@ set_settings(Map) ->
                               error -> do_nothing
                           end
                   end, all_keys()),
-    ok.
-
-
--spec test_run() -> ok.
-test_run() ->
-    application:ensure_all_started(epgsql_pool),
-
-    Params = #{host => "localhost",
-               port => 5432,
-               username => "test",
-               password => "test",
-               database => "testdb"},
-    {ok, _} = epgsql_pool:start(my_pool, 2, 2, Params),
-
-
-    Res1 = epgsql_pool:query(my_pool, "select * from category"),
-    error_logger:info_msg("Res1: ~p", [Res1]),
-
     ok.
 
 

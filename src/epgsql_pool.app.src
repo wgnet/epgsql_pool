@@ -14,6 +14,13 @@
          {pooler_max_queue, 1000},
          {max_reconnect_timeout, 5000},
          {min_reconnect_timeout, 100},
-         {keep_alive_timeout, 60000}
+         {keep_alive_timeout, 60000},
+         %%
+         %% callback is function of arity 1 which accepts pool name
+         %%
+         %% {on_connect_callback, {Module :: atom(), Function :: atom()}},
+         {on_connect_callback, undefined},
+         %% {on_disconnect_callback, {Module :: atom(), Function :: atom()}}
+         {on_disconnect_callback, undefined}
         ]}
  ]}.
