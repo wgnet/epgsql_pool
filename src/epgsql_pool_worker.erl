@@ -108,20 +108,20 @@ handle_info(open_connection, #state{pool_name = PoolName, connection = Connectio
     end;
 
 handle_info(on_connect, #state{pool_name = PoolName, connection = Connection} = State) ->
-    case application:get_env(epgsql_pool, on_connect_callback) of
+    case application:get_env(epgsql_pool, connect_listener) of
         undefined -> ignore;
         {ok, undefined} -> ignore;
-        {ok, {M, F}} ->
-            #epgsql_connection{sock = Sock} = Connection,
-            M:F(PoolName, Sock)
+        {ok, Listener} ->
+            Listener ! {epgsql_connect, PoolName, self()}
     end,
     {noreply, State};
 
 handle_info(on_disconnect, #state{pool_name = PoolName} = State) ->
-    case application:get_env(epgsql_pool, on_disconnect_callback) of
+    case application:get_env(epgsql_pool, disconnect_listener) of
         undefined -> ignore;
         {ok, undefined} -> ignore;
-        {ok, {M, F}} -> M:F(PoolName)
+        {ok, Listener} ->
+            Listener ! {epgsql_disconnect, PoolName}
     end,
     {noreply, State};
 

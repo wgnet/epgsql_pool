@@ -15,13 +15,7 @@
          {max_reconnect_timeout, 5000},
          {min_reconnect_timeout, 100},
          {keep_alive_timeout, 60000},
-         %%
-         %% callback is function of arity 2 which accepts pool name and connection socket pid
-         %% {on_connect_callback, {Module :: atom(), Function :: atom()}},
-         {on_connect_callback, undefined},
-         %%
-         %% callback is function of arity 1 which accepts pool name
-         %% {on_disconnect_callback, {Module :: atom(), Function :: atom()}}
-         {on_disconnect_callback, undefined}
+         {connect_listener, undefined}, % process pid or name
+         {disconnect_listener, undefined} % process pid or name
         ]}
  ]}.
