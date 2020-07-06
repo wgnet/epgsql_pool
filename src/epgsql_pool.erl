@@ -5,10 +5,13 @@
          query/2, query/3, query/4,
          squery/2, squery/3,
          transaction/2,
-         get_settings/0, set_settings/1
+         get_settings/0, set_settings/1,
+         get_worker/1,
+         set_notice/2
         ]).
 
 -include("epgsql_pool.hrl").
+-include("otp_types.hrl").
 
 -type(pool_name() :: binary() | string() | atom()).
 -export_type([pool_name/0]).
@@ -166,6 +169,10 @@ set_settings(Map) ->
                   end, all_keys()),
     ok.
 
+-spec set_notice(pid(), pid()) -> gs_call_reply().
+set_notice(Worker, Pid) ->
+    Timeout = application:get_env(epgsql_pool, query_timeout, 5000),
+    gen_server:call(Worker, {set_async_receiver, Pid}, Timeout).
 
 %%% inner functions
 
