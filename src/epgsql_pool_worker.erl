@@ -50,6 +50,10 @@ handle_call(stop, _From, #state{connection = Connection,
     erlang:cancel_timer(NR_KA_Timer),
     {stop, normal, ok, State#state{connection = Connection2}};
 
+handle_call({set_async_receiver, ReceiverPid}, _From, #state{connection = #epgsql_connection{sock = Sock}} = State) ->
+    epgsql:set_notice_receiver(Sock, ReceiverPid),
+    {reply, ok, State};
+
 handle_call(_, _From, #state{connection = undefined} = State) ->
     {reply, {error, no_connection}, State};
 
