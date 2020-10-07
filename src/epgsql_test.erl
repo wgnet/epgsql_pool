@@ -4,12 +4,16 @@
 -export([test_run/0]).
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2, terminate/2, code_change/3]).
 
+-include("otp_types.hrl").
 
+
+-spec test_run() -> gs_start_link_reply().
 test_run() ->
     application:ensure_all_started(epgsql_pool),
     gen_server:start_link({local, ?MODULE}, ?MODULE, no_args, []).
 
 
+-spec init(gs_args()) -> gs_init_reply().
 init(no_args) ->
     application:set_env(epgsql_pool, connect_listener, self()),
     application:set_env(epgsql_pool, disconnect_listener, ?MODULE),
@@ -17,14 +21,17 @@ init(no_args) ->
     {ok, no_state}.
 
 
+-spec handle_call(gs_request(), gs_from(), gs_reply()) -> gs_call_reply().
 handle_call(_Request, _From, State) ->
     {reply, ok, State}.
 
 
+-spec handle_cast(gs_request(), gs_state()) -> gs_cast_reply().
 handle_cast(_Request, State) ->
     {noreply, State}.
 
 
+-spec handle_info(gs_request(), gs_state()) -> gs_info_reply().
 handle_info(start_pool, State) ->
     error_logger:info_msg("Start Pool"),
     Params = #{
@@ -69,10 +76,12 @@ handle_info(_Info, State) ->
     {noreply, State}.
 
 
+-spec terminate(terminate_reason(), gs_state()) -> ok.
 terminate(_Reason, _State) ->
     ok.
 
 
+-spec code_change(term(), term(), term()) -> gs_code_change_reply().
 code_change(_OldVsn, State, _Extra) ->
     {ok, State}.
 

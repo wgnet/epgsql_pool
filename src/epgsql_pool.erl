@@ -145,9 +145,9 @@ transaction(PoolName0, Fun) ->
                   gen_server:call(Worker, {squery, "COMMIT"}, Timeout),
                   Result
               catch
-                  Err:Reason ->
+                  Err:Reason:ST ->
                       gen_server:call(Worker, {squery, "ROLLBACK"}, Timeout),
-                      erlang:raise(Err, Reason, erlang:get_stacktrace())
+                      erlang:raise(Err, Reason, ST)
               end
       end).
 
@@ -195,9 +195,9 @@ with_worker(PoolName, Fun) ->
                 try
                     Fun(Worker)
                 catch
-                    Err:Reason ->
+                    Err:Reason:ST ->
                         pooler:return_member(PoolName, Worker, fail),
-                        erlang:raise(Err, Reason, erlang:get_stacktrace())
+                        erlang:raise(Err, Reason, ST)
                 end,
             pooler:return_member(PoolName, Worker, ok),
             Response;
