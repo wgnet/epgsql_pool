@@ -1,5 +1,5 @@
 {"1.1.0",
-[{<<"epgsql">>,{pkg,<<"epgsql">>,<<"3.3.0">>},0},
+[{<<"epgsql">>,{pkg,<<"epgsql">>,<<"4.4.0">>},0},
  {<<"herd">>,
   {git,"https://github.com/wgnet/herd",
        {ref,"7ef6954e13e854f32b02a2b97362458ed5208f8d"}},
@@ -10,5 +10,5 @@
   0}]}.
 [
 {pkg_hash,[
- {<<"epgsql">>, <<"974A578340E52012CBAB820CE756E7ED1DF1BAF0110C59A6753D8337A2CF9454">>}]}
+ {<<"epgsql">>, <<"8FE21C9C6651A4286CF57E33719DF0CF70685879E50EF6B4D0CCD95E5006206D">>}]}
 ].
