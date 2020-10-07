@@ -17,7 +17,9 @@
 
 -define(SELECT_ITEMS_QUERY, "SELECT id, category_id, title, num FROM item ORDER by id ASC").
 
+-type config() :: proplists:proplist().
 
+-spec all() -> [atom()].
 all() ->
     [query_test,
      squery_test,
@@ -28,17 +30,20 @@ all() ->
     ].
 
 
+-spec init_per_suite(config()) -> config().
 init_per_suite(Config) ->
     application:ensure_all_started(epgsql_pool),
     Config.
 
 
+-spec end_per_suite(config()) -> config().
 end_per_suite(Config) ->
     application:stop(epgsql_pool),
     Config.
 
 
-init_per_testcase(_, Config) ->
+-spec init_per_testcase(atom(), config()) -> config().
+init_per_testcase(_TestCase, Config) ->
     Params = #epgsql_connection_params{host = "localhost", port = 5432, username = "test", password = "test", database = "testdb"},
     {ok, _} = epgsql_pool:start(my_pool, 5, 10, Params),
     epgsql_pool:query(my_pool, "TRUNCATE TABLE item"),
@@ -46,12 +51,14 @@ init_per_testcase(_, Config) ->
     Config.
 
 
-end_per_testcase(_, Config) ->
+-spec end_per_testcase(atom(), config()) -> config().
+end_per_testcase(_TestCase, Config) ->
     ok = epgsql_pool:stop(my_pool),
     Config.
 
 
-query_test(Config) ->
+-spec query_test(config()) -> ok.
+query_test(_Config) ->
     {ok, 3, _, Ids} = epgsql_pool:query(my_pool,
                                         "INSERT INTO category (title) "
                                         "VALUES ('cat 1'), ('cat 2'), ('cat 3') "
@@ -72,6 +79,8 @@ query_test(Config) ->
     ?assertMatch(#error{severity = error, message = <<"relation \"some_table\" does not exist">>}, Error),
     ok.
 
+
+-spec squery_test(config()) -> ok.
 squery_test(Config) ->
     {ok, 3, _, Ids} = epgsql_pool:squery(my_pool,
                                          "INSERT INTO category (title) "
@@ -90,7 +99,9 @@ squery_test(Config) ->
                  epgsql_pool:squery(my_pool, "SELECT * FROM some_table")),
     Config.
 
-transaction_test(Config) ->
+
+-spec transaction_test(config()) -> ok.
+transaction_test(_Config) ->
     {FirstCatId, CatIds2, ItemIds2} =
         epgsql_pool:transaction(my_pool,
                                 fun(Worker) ->
@@ -148,7 +159,8 @@ transaction_test(Config) ->
     ok.
 
 
-reconnect_test(Config) ->
+-spec reconnect_test(config()) -> ok.
+reconnect_test(_Config) ->
     Worker = pooler:take_member(my_pool, 1000),
     [state, my_pool, #epgsql_connection{sock = Sock1} | _]= tuple_to_list(sys:get_state(Worker)),
     ct:log("Worker: ~p, sock: ~p", [Worker, Sock1]),
@@ -183,6 +195,7 @@ reconnect_test(Config) ->
     ok.
 
 
+-spec timeout_test(config()) -> ok.
 timeout_test(_Config) ->
     Res1 = epgsql_pool:query(my_pool, "SELECT pg_sleep(1)", [], [{timeout, 2000}]),
     ct:log("Res1:~p", [Res1]),
@@ -206,6 +219,7 @@ timeout_test(_Config) ->
     ok.
 
 
+-spec validate_connection_params_test(config()) -> ok.
 validate_connection_params_test(_Config) ->
     Params1 = #epgsql_connection_params{host = "localhost", port = 5432,
                                         username = "test", password = "test", database = "testdb"},

@@ -4,6 +4,7 @@
 -include_lib("eunit/include/eunit.hrl").
 
 
+-spec pool_name_to_atom_test() -> ok.
 pool_name_to_atom_test() ->
     ?assertEqual(my_pool, epgsql_pool_utils:pool_name_to_atom(my_pool)),
     ?assertEqual(my_pool, epgsql_pool_utils:pool_name_to_atom("my_pool")),

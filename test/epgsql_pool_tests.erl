@@ -4,6 +4,7 @@
 -include_lib("eunit/include/eunit.hrl").
 
 
+-spec get_set_settings_test() -> ok.
 get_set_settings_test() ->
      application:ensure_all_started(epgsql_pool),
 
