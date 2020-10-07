@@ -3,8 +3,10 @@
 -export([start/4, stop/1,
          validate_connection_params/1,
          query/2, query/3, query/4,
+         query_with_stat/2, query_with_stat/3, query_with_stat/4,
          squery/2, squery/3,
-         transaction/2,
+         squery_with_stat/2, squery_with_stat/3,
+         transaction/2, transaction_with_stat/2,
          get_settings/0, set_settings/1,
          get_worker/1,
          set_notice/2
@@ -77,31 +79,71 @@ validate_connection_params(#epgsql_connection_params{host = Host, port = Port, u
     end.
 
 
--spec query(pool_name() | pid(), epgsql:sql_query()) -> epgsql:reply().
+-spec query(pool_name() | pid(), epgsql:sql_query()) ->
+    epgsql:reply() | {error, term()}.
 query(PoolNameOrWorker, Stmt) ->
     query(PoolNameOrWorker, Stmt, [], []).
 
 
--spec query(pool_name() | pid(), epgsql:sql_query(), [epgsql:bind_param()]) -> epgsql:reply().
+-spec query(pool_name() | pid(), epgsql:sql_query(), [epgsql:bind_param()]) ->
+    epgsql:reply() | {error, term()}.
 query(PoolNameOrWorker, Stmt, Params) ->
     query(PoolNameOrWorker, Stmt, Params, []).
 
 
--spec query(pool_name() | pid(), epgsql:sql_query(), [epgsql:bind_param()], [proplists:option()]) -> epgsql:reply().
+-spec query(pool_name(), epgsql:sql_query(), [epgsql:bind_param()], [proplists:option()]) ->
+    epgsql:reply() | {error, term()}.
 query(PoolNameOrWorker, Stmt, Params, Options) ->
     do_query(PoolNameOrWorker, {equery, Stmt, Params}, Options).
 
 
--spec squery(pool_name() | pid(), epgsql:sql_query()) -> epgsql:reply(epgsql:squery_row()) | {error, timeout}.
+-spec query_with_stat(pool_name(), epgsql:sql_query()) ->
+    {epgsql:reply(), #epgsql_query_stat{}} | {error, term()}.
+query_with_stat(PoolNameOrWorker, Stmt) ->
+    query_with_stat(PoolNameOrWorker, Stmt, [], []).
+
+
+-spec query_with_stat(pool_name(), epgsql:sql_query(), [epgsql:bind_param()]) ->
+    {epgsql:reply(), #epgsql_query_stat{}} | {error, term()}.
+query_with_stat(PoolNameOrWorker, Stmt, Params) ->
+    query_with_stat(PoolNameOrWorker, Stmt, Params, []).
+
+
+-spec query_with_stat(pool_name() | pid(), epgsql:sql_query(), [epgsql:bind_param()], [proplists:option()]) ->
+    {epgsql:reply(), #epgsql_query_stat{}} | {error, term()}.
+query_with_stat(PoolNameOrWorker, Stmt, Params, Options) ->
+    do_query_with_stat(PoolNameOrWorker, {equery, Stmt, Params}, Options).
+
+
+-spec squery(pool_name() | pid(), epgsql:sql_query()) -> epgsql:reply() | {error, term()}.
 squery(PoolNameOrWorker, Stmt) ->
     squery(PoolNameOrWorker, Stmt, []).
 
+
 -spec squery(pool_name() | pid(), epgsql:sql_query(), [proplists:option()]) ->
-                    epgsql:reply(epgsql:squery_row()) | {error, timeout}.
+                    epgsql:reply() | {error, term()}.
 squery(PoolNameOrWorker, Stmt, Options) ->
     do_query(PoolNameOrWorker, {squery, Stmt}, Options).
 
 
+
+-spec squery_with_stat(pool_name(), epgsql:sql_query()) ->
+    {epgsql:reply(), #epgsql_query_stat{}} | {error, term()}.
+squery_with_stat(PoolNameOrWorker, Stmt) ->
+    squery_with_stat(PoolNameOrWorker, Stmt, []).
+
+
+-spec squery_with_stat(pool_name(), epgsql:sql_query(), [proplists:option()]) ->
+    {epgsql:reply(), #epgsql_query_stat{}} | {error, term()}.
+squery_with_stat(PoolNameOrWorker, Stmt, Options) ->
+    do_query_with_stat(PoolNameOrWorker, {squery, Stmt}, Options).
+
+
+-spec do_query(
+    pool_name() | pid(),
+    {equery, epgsql:sql_query(), [epgsql:bind_param()]} | {squery, epgsql:sql_query()},
+    [proplists:option()]
+) -> epgsql:reply() | {error, term()}.
 do_query(Worker, QueryTuple, Options) when is_pid(Worker) ->
     Timeout = case proplists:get_value(timeout, Options) of
                   undefined -> element(2, application:get_env(epgsql_pool, query_timeout));
@@ -124,16 +166,32 @@ do_query(Worker, QueryTuple, Options) when is_pid(Worker) ->
     end;
 
 do_query(PoolName0, QueryTuple, Options) ->
+    {Res, _Stat} = do_query_with_stat(PoolName0, QueryTuple, Options),
+    Res.
+
+
+-spec do_query_with_stat(
+    pool_name(),
+    {equery, epgsql:sql_query(), [epgsql:bind_param()]} | {squery, epgsql:sql_query()},
+    [proplists:option()]
+) -> {epgsql:reply(), #epgsql_query_stat{}} | {error, term()}.
+do_query_with_stat(PoolName0, QueryTuple, Options) when not is_pid(PoolName0) ->
     PoolName = epgsql_pool_utils:pool_name_to_atom(PoolName0),
     with_worker(
-      PoolName,
-      fun(Worker) ->
-              do_query(Worker, QueryTuple, Options)
-      end).
+        PoolName,
+        fun(Worker) ->
+            do_query(Worker, QueryTuple, Options)
+        end).
 
 
 -spec transaction(pool_name(), fun()) -> epgsql:reply() | {error, term()}.
 transaction(PoolName0, Fun) ->
+    {Res, _Stat} = transaction_with_stat(PoolName0, Fun),
+    Res.
+
+
+-spec transaction_with_stat(pool_name(), fun()) -> {epgsql:reply(), #epgsql_query_stat{}} | {error, term()}.
+transaction_with_stat(PoolName0, Fun) ->
     PoolName = epgsql_pool_utils:pool_name_to_atom(PoolName0),
     Timeout = application:get_env(epgsql_pool, transaction_timeout, 20000),
     with_worker(
@@ -174,13 +232,17 @@ set_notice(Worker, Pid) ->
     Timeout = application:get_env(epgsql_pool, query_timeout, 5000),
     gen_server:call(Worker, {set_async_receiver, Pid}, Timeout).
 
+
 %%% inner functions
 
--spec get_worker(pool_name()) -> {ok, pid()} | {error, term()}.
+-spec get_worker(pool_name()) -> {ok, pid(), integer()} | {error, term()}.
 get_worker(PoolName) ->
     {ok, Timeout} = application:get_env(epgsql_pool, pooler_get_worker_timeout),
+    T1 = os:system_time(microsecond),
     case pooler:take_member(PoolName, Timeout) of
-        Worker when is_pid(Worker) -> {ok, Worker};
+        Worker when is_pid(Worker) ->
+            T2 = os:system_time(microsecond),
+            {ok, Worker, T2 - T1};
         error_no_members ->
             PoolStats = pooler:pool_stats(PoolName),
             error_logger:error_msg("Pool ~p overload: ~p", [PoolName, PoolStats]),
@@ -188,12 +250,20 @@ get_worker(PoolName) ->
     end.
 
 
+-spec with_worker(pool_name(), fun()) -> {epgsql:reply(), #epgsql_query_stat{}} | {error, term()}.
 with_worker(PoolName, Fun) ->
     case get_worker(PoolName) of
-        {ok, Worker} ->
+        {ok, Worker, GetWorkerTime} ->
             Response =
                 try
-                    Fun(Worker)
+                    T1 = os:system_time(microsecond),
+                    Res = Fun(Worker),
+                    T2 = os:system_time(microsecond),
+                    Stat = #epgsql_query_stat{
+                        get_worker_time = GetWorkerTime,
+                        query_time = T2 - T1
+                    },
+                    {Res, Stat}
                 catch
                     Err:Reason:ST ->
                         pooler:return_member(PoolName, Worker, fail),

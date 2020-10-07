@@ -12,3 +12,8 @@
           params :: #epgsql_connection_params{} | undefined,
           reconnect_attempt = 0 :: non_neg_integer()
          }).
+
+-record(epgsql_query_stat, {
+          get_worker_time :: non_neg_integer(),
+          query_time :: non_neg_integer()
+         }).

@@ -8,12 +8,7 @@
 -include_lib("common_test/include/ct.hrl").
 -include_lib("eunit/include/eunit.hrl").
 
-
--export([all/0,
-         init_per_suite/1, end_per_suite/1, init_per_testcase/2, end_per_testcase/2,
-         query_test/1, squery_test/1, transaction_test/1, reconnect_test/1, timeout_test/1,
-         validate_connection_params_test/1
-        ]).
+-compile([export_all]).
 
 -define(SELECT_ITEMS_QUERY, "SELECT id, category_id, title, num FROM item ORDER by id ASC").
 
@@ -22,8 +17,11 @@
 -spec all() -> [atom()].
 all() ->
     [query_test,
+     query_with_stat_test,
      squery_test,
+     squery_with_stat_test,
      transaction_test,
+     transaction_with_stat_test,
      reconnect_test,
      timeout_test,
      validate_connection_params_test
@@ -80,6 +78,14 @@ query_test(_Config) ->
     ok.
 
 
+-spec query_with_stat_test(config()) -> ok.
+query_with_stat_test(_Config) ->
+    {_, Stat} = epgsql_pool:query_with_stat(my_pool, "SELECT id, title FROM category ORDER by id ASC"),
+    ct:log("Stat ~p", [Stat]),
+    ?assertMatch(#epgsql_query_stat{}, Stat),
+    ok.
+
+
 -spec squery_test(config()) -> ok.
 squery_test(Config) ->
     {ok, 3, _, Ids} = epgsql_pool:squery(my_pool,
@@ -98,6 +104,14 @@ squery_test(Config) ->
     ?assertMatch({error, #error{severity = error, message = <<"relation \"some_table\" does not exist">>}},
                  epgsql_pool:squery(my_pool, "SELECT * FROM some_table")),
     Config.
+
+
+-spec squery_with_stat_test(config()) -> ok.
+squery_with_stat_test(_Config) ->
+    {_, Stat} = epgsql_pool:squery_with_stat(my_pool, "SELECT id, title FROM category ORDER by id ASC"),
+    ct:log("Stat ~p", [Stat]),
+    ?assertMatch(#epgsql_query_stat{}, Stat),
+    ok.
 
 
 -spec transaction_test(config()) -> ok.
@@ -156,6 +170,18 @@ transaction_test(_Config) ->
 
     %% items not changes after calcelled transaction
     {ok, _, ItemRows} = epgsql_pool:query(my_pool, ?SELECT_ITEMS_QUERY),
+    ok.
+
+
+-spec transaction_with_stat_test(config()) -> ok.
+transaction_with_stat_test(_Config) ->
+    {_, Stat} =
+        epgsql_pool:transaction_with_stat(my_pool,
+            fun(Worker) ->
+                epgsql_pool:query(Worker, ?SELECT_ITEMS_QUERY)
+            end),
+    ct:log("Stat ~p", [Stat]),
+    ?assertMatch(#epgsql_query_stat{}, Stat),
     ok.
 
 
