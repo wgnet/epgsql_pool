@@ -233,10 +233,18 @@ set_notice(Worker, Pid) ->
     gen_server:call(Worker, {set_async_receiver, Pid}, Timeout).
 
 
+-spec get_worker(pool_name()) -> {ok, pid()} | {error, term()}.
+get_worker(PoolName) ->
+    case get_worker_with_time(PoolName) of
+        {ok, Worker, _Time} -> {ok, Worker};
+        Error -> Error
+    end.
+
+
 %%% inner functions
 
--spec get_worker(pool_name()) -> {ok, pid(), integer()} | {error, term()}.
-get_worker(PoolName) ->
+-spec get_worker_with_time(pool_name()) -> {ok, pid(), integer()} | {error, term()}.
+get_worker_with_time(PoolName) ->
     {ok, Timeout} = application:get_env(epgsql_pool, pooler_get_worker_timeout),
     T1 = os:system_time(microsecond),
     case pooler:take_member(PoolName, Timeout) of
@@ -252,7 +260,7 @@ get_worker(PoolName) ->
 
 -spec with_worker(pool_name(), fun()) -> {epgsql:reply(), #epgsql_query_stat{}} | {error, term()}.
 with_worker(PoolName, Fun) ->
-    case get_worker(PoolName) of
+    case get_worker_with_time(PoolName) of
         {ok, Worker, GetWorkerTime} ->
             Response =
                 try
