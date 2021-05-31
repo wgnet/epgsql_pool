@@ -1,14 +1,15 @@
-{"1.1.0",
-[{<<"epgsql">>,{pkg,<<"epgsql">>,<<"4.4.0">>},0},
+{"1.2.0",
+[{<<"epgsql">>,{pkg,<<"epgsql">>,<<"4.5.0">>},0},
  {<<"herd">>,
-  {git,"https://github.com/wgnet/herd",
-       {ref,"7ef6954e13e854f32b02a2b97362458ed5208f8d"}},
+  {git,"https://github.com/wgnet/herd.git",
+       {ref,"934847589dcf5a6d2b02a1f546ffe91c04066f17"}},
   0},
- {<<"pooler">>,
-  {git,"https://github.com/seth/pooler.git",
-       {ref,"a9fb9dbbac45000f10d8edf4464bf8425b39bd77"}},
-  0}]}.
+ {<<"pooler">>,{pkg,<<"pooler">>,<<"1.5.3">>},0}]}.
 [
 {pkg_hash,[
- {<<"epgsql">>, <<"8FE21C9C6651A4286CF57E33719DF0CF70685879E50EF6B4D0CCD95E5006206D">>}]}
+ {<<"epgsql">>, <<"CA863EE3A771E7696AE58EC924A29DF8435CDAFFA64DBA70C02DD2571AD2122D">>},
+ {<<"pooler">>, <<"898CD1FA301FC42D4A8ED598CE139B71CA85B54C16AB161152B5CC5FBDCFA1A8">>}]},
+{pkg_hash_ext,[
+ {<<"epgsql">>, <<"0A02D338CC1426C5873B412FED9D694F7B5143933C5F85F244655A5E77B23078">>},
+ {<<"pooler">>, <<"058D85C5081289B90E97E4DDDBC3BB5A3B4A19A728AB3BC88C689EFCC36A07C7">>}]}
 ].
